@@ -1,6 +1,6 @@
 
 goldenMaster {
-    sourcePath = 'src/'
+    sourcePath = 'src/arc42-master/'
     targetPath = 'build/src_gen/'
 
     // a list of all features contained in the golden master

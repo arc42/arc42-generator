@@ -58,7 +58,7 @@ task createTemplatesFromGoldenMaster (
         //let's fetch the available languages from the source dir
         logger.lifecycle "found templates in the following languages: "+languages
         languages.each { language ->
-            def pathToGoldenMaster = config.goldenMaster.sourcePath + '/' + language + '/asciidoc/' + 'golden-master'
+            def pathToGoldenMaster = config.goldenMaster.sourcePath + '/' + language + '/asciidoc/'
             def source = file(pathToGoldenMaster+'/src/.')
             logger.info "copy golden master from ${source.path} ..."
             //the list of features/tags available in the golden master
@@ -82,13 +82,7 @@ task createTemplatesFromGoldenMaster (
                         targetFile.write(template, 'utf-8')
                     }
                 }
-                //copy build file from german golden master
-                logger.info "copy build.gradle to " + pathToGoldenMaster
-                def pathToDEGoldenMaster = config.goldenMaster.sourcePath + '/' + 'DE' + '/asciidoc/' + 'golden-master'
-                def buildfile = new File (pathToDEGoldenMaster + '/build.gradle').getText('utf-8')
-                buildfile = buildfile.replaceAll(/<INJECT_LANG>/,language)
-                buildfile = buildfile.replaceAll(/<INJECT_NAME>/,templateName)
-                new File(pathToTarget+'/build.gradle').write(buildfile,'utf-8')
+                def pathToDEGoldenMaster = config.goldenMaster.sourcePath + '/' + 'DE' + '/asciidoc/' 
                 //copy images
                 logger.info "copy images folder from " + pathToDEGoldenMaster + '/../../images'
                 logger.info "                     to " + pathToTarget + '/images'
