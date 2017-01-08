@@ -5,12 +5,22 @@ def config = new ConfigSlurper().parse file('buildconfig.groovy').text
 //let's fetch all generated subprojects
 def target = file(config.goldenMaster.targetPath)
 
+logger.debug "*"*80
 logger.debug target.canonicalPath
 logger.debug target.exists().toString()
+logger.debug "*"*80
 
 if (target.exists()) {
     target.eachFileRecurse { f ->
-        if (f.name.endsWith('.gradle')) {
+    logger.info f.name
+        if (f.name == 'src') {
+	        //copy build file
+	        new File(f.parentFile.path+"/build.gradle")
+                .write(
+                    new File("subBuild.gradle").text
+                    .replaceAll('%LANG%',f.parentFile.path.split('[/\\\\]')[-3])
+                    .replaceAll('%TYPE%',f.parentFile.path.split('[/\\\\]')[-1])
+                )
             logger.info "include subproject " + f.parentFile.path-rootProject.projectDir.path
             include f.parentFile.path+'/'-rootProject.projectDir.path
         }

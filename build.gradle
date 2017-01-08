@@ -59,8 +59,9 @@ task createTemplatesFromGoldenMaster (
         logger.lifecycle "found templates in the following languages: "+languages
         languages.each { language ->
             def pathToGoldenMaster = config.goldenMaster.sourcePath + '/' + language + '/asciidoc/'
-            def source = file(pathToGoldenMaster+'/src/.')
-            logger.info "copy golden master from ${source.path} ..."
+            def sourceSub = file(pathToGoldenMaster+'/src/.')
+            def sourceMain = file(pathToGoldenMaster+'/.')
+            logger.info "copy golden master from ${sourceMain.path} ..."
             //the list of features/tags available in the golden master
             def allFeatures = config.goldenMaster.allFeatures
             //the template styles with their corresponding features
@@ -72,14 +73,16 @@ task createTemplatesFromGoldenMaster (
                 target.mkdirs()
                 logger.info "                     to ${target.path}"
                 logger.lifecycle "create %buildDir%${target.path - buildDir}"
-                source.eachFile { sourceFile ->
-                    if (sourceFile.name.endsWith('.adoc') || sourceFile.name.endsWith('.config')) {
-                        def targetFile = file(target.path + '/' + sourceFile.name)
-                        def template = sourceFile.getText('utf-8')
-                        featuresToRemove.each { feature ->
-                            template = template.replaceAll(/(?ms)\[role="arc42/ + feature + /"\][ \r\n]+[*]{4}.*?[*]{4}/, '')
+                [sourceMain,sourceSub].each { source ->
+                    source.eachFile { sourceFile ->
+                        if (sourceFile.name.endsWith('.adoc') || sourceFile.name.endsWith('.config')) {
+                            def targetFile = file(target.path + '/' + sourceFile.name)
+                            def template = sourceFile.getText('utf-8')
+                            featuresToRemove.each { feature ->
+                                template = template.replaceAll(/(?ms)\[role="arc42/ + feature + /"\][ \r\n]+[*]{4}.*?[*]{4}/, '')
+                            }
+                            targetFile.write(template, 'utf-8')
                         }
-                        targetFile.write(template, 'utf-8')
                     }
                 }
                 def pathToDEGoldenMaster = config.goldenMaster.sourcePath + '/' + 'DE' + '/asciidoc/' 
