@@ -24,7 +24,7 @@ In order to create the other formats from the "Golden Master", follow these step
 2. Add the "Golden Master" templates by cloning them into the +src+ directory
 
    cd src
-   git clone git@github.com:arc42/arc42-master.git
+   git clone git@github.com:arc42/arc42-template.git
    cd ..
 
 3. Create derived versions from the "Golden Master"
@@ -44,23 +44,27 @@ anything goes :-).  `gradlew createT` is as valid as `gradlew cTFGM`.
     gradlew arc42
 
 
+This will generate all other formats, i.e. docx and markdown.
+The results are created the `/build` directory.
 
-NOTE:  for this step to work, you need pandoc installed with version 1.12.4.2 or higher.
+=== System Requirements
 
-This will create all other formats. They will be located directly in the +build+ directory.
-This is still work in progress. Some of the build steps need extra tools like pandoc installed,
-so it is likely that you encounter errors.
+* Java Runtime (everything above 1.7 should work)
+* http://pandoc.org[pandoc] installed with version 1.12.4.2 or higher
+
+As some of the build steps require **locally installed additional tools*
+(like pandoc), you might encounter errors if these are missing on your system.
 
 
-== Requirements
-We collected the +arc42+ link:docs/arc42-requirements.adoc[requirements]
-in its own document.
+== General Requirements
+We collected the +arc42+ link:docs/arc42-requirements.adoc[requirements
+in a separate document].
 
 
 
 == Downloads
 Please be patient - downloads will be available from here once
-we establish the travis-based continous build system.
+we establish the travis-based continuous build system.
 
 
 === German Versions

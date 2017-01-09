@@ -1,7 +1,7 @@
 import org.asciidoctor.gradle.AsciidoctorTask
 
 // // gradle build script for the arc42 template
-// ("plain" subproject, creating the templage without help text)
+// ("plain" subproject, creating the template without help text)
 //
 // free software - without guarantee, use at your own risk
 // ========================================================
@@ -27,12 +27,12 @@ apply plugin: 'asciidoctor'
 // empty build task for netbeans
 task build () << {}
 
-// common settings  
-tasks.withType(AsciidoctorTask) { docTask ->  
+// common settings
+tasks.withType(AsciidoctorTask) { docTask ->
     sourceDir = project.file('./src')
-    options = [  
-        logDocuments: true,  
-        attributes: [  
+    options = [
+        logDocuments: true,
+        attributes: [
             toc         : 'left',
             doctype     : 'book',
             icons       : 'font',
@@ -40,8 +40,8 @@ tasks.withType(AsciidoctorTask) { docTask ->
             sectanchors : true,
             numbered    : true,
             imagesdir   : 'images',
-        ]  
-    ]  
+        ]
+    ]
 }
 
 task copyAsciidoc (
@@ -79,7 +79,7 @@ task generateHTML (
     description: 'use html5 as asciidoc backend') {
     sourceDocumentName = project.file('./src/arc42-template.adoc')
     outputDir = new File( localBuildDir.html )
-    backend = 'html5'  
+    backend = 'html5'
 }
 
 task generateDocbook (
@@ -112,7 +112,7 @@ task generateDocbookMP (
         backend = 'docbook'
     } else {
         println """
-    Failed to generate DocBook
+    Failed to generate markdownMP
     it seems that a format which needs DocBook as intermediate format is configured in buildconfig.groovy
     please add
         'docbook': [imageFolder: true]
