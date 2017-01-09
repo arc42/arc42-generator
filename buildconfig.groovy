@@ -1,6 +1,6 @@
 
 goldenMaster {
-    sourcePath = 'src/arc42-master/'
+    sourcePath = 'arc42-template/'
     targetPath = 'build/src_gen/'
 
     // a list of all features contained in the golden master
@@ -10,7 +10,7 @@ goldenMaster {
     templateStyles = [
             'plain'    : [],
             'with-help': ['help'],
-            // deaktivated for the moment - no content yet
+            // deactivated for the moment - no content yet
             // 'with-examples':['help','example'],
     ]
 }
@@ -27,7 +27,6 @@ formats = [
 ]
 
 distribution {
-    targetPath = "build/dist/"
+    targetPath = "arc42-template/dist/"
     //formats = ['asciidoc','html','epub','markdown','docx','docbook']
 }
-
