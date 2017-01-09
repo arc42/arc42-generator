@@ -23,7 +23,7 @@ In order to create the other formats from the "Golden Master", follow these step
 
 2. Add the "Golden Master" templates by cloning them into the +src+ directory
 
-   cd src+
+   cd src
    git clone git@github.com:arc42/arc42-master.git
    cd ..
 
