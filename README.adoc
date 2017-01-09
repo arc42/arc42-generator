@@ -23,9 +23,8 @@ In order to create the other formats from the "Golden Master", follow these step
 
 2. Add the "Golden Master" templates by cloning them into the +src+ directory
 
-   cd src
    git clone git@github.com:arc42/arc42-template.git
-   cd ..
+
 
 3. Create derived versions from the "Golden Master"
 
@@ -52,10 +51,18 @@ The results are created the `/build` directory.
     gradlew createDistribution
 
 +
-This will create the 'build/dist' directory with all downloadable
+This will create the 'arc42-template/dist' directory with all downloadable
 versions, nicely compressed.
 
-    
+6. Now you should cross-check, test, verify the generated files :-)
+
+7. Finally you can commit and push these to the arc42-template repository:
+
+    cd arc42-template
+    git commit -m "<commit comment>" *.zip
+    git push https://github.com/arc42/arc42-template.git
+
+
 === System Requirements
 
 * Java Runtime (everything above 1.7 should work)
@@ -71,55 +78,6 @@ in a separate document].
 
 
 
-== Downloads
-Please be patient - downloads will be available from here once
-we establish the travis-based continuous build system.
-
-
-=== German Versions
-[options="header"]
-|===
-| Version/Format     | MS-Word (c), docx | Confluence | pdf | html | asciidoc | textile
-
-| skeleton structure
-| http://arc42.github.io/arc42-template/dist/arc42-template-DE-plain-docx.zip[skel-docx]
-| skel-confluence
-| skel-pdf
-| http://arc42.github.io/arc42-template/dist/arc42-template-DE-plain-html.zip[skel-html]
-| http://arc42.github.io/arc42-template/dist/arc42-template-DE-plain-asciidoc.zip[skel-asciidoc]
-| http://arc42.github.io/arc42-template/dist/arc42-template-DE-plain-textile.zip[skel-textile]
-
-| ... plus explanation
-| http://arc42.github.io/arc42-template/dist/arc42-template-DE-withhelp-docx.zip[help-docx]
-| help-confluence
-| help-pdf
-| http://arc42.github.io/arc42-template/dist/arc42-template-DE-withhelp-html.zip[help-html]
-| http://arc42.github.io/arc42-template/dist/arc42-template-DE-withhelp-asciidoc.zip[help-asciidoc]
-| http://arc42.github.io/arc42-template/dist/arc42-template-DE-withhelp-textile.zip[help-textile]
-
-| ... plus samples | sample-docx         | sample-confluence | sample-pdf | sample-html
-|===
-
-=== English Versions
-[options="header"]
-|===
-| Version/Format     | MS-Word (c), docx | Confluence | pdf | html | asciidoc | textile
-
-| skeleton structure
-| http://arc42.github.io/arc42-template/dist/arc42-template-EN-plain-docx.zip[skel-docx]
-| skel-confluence
-| skel-pdf
-| http://arc42.github.io/arc42-template/dist/arc42-template-EN-plain-html.zip[skel-html]
-| http://arc42.github.io/arc42-template/dist/arc42-template-EN-plain-asciidoc.zip[skel-asciidoc]
-| http://arc42.github.io/arc42-template/dist/arc42-template-EN-plain-textile.zip[skel-textile]
-
-| ... plus explanation
-| http://arc42.github.io/arc42-template/dist/arc42-template-EN-withhelp-docx.zip[help-docx]
-| help-confluence
-| help-pdf
-| http://arc42.github.io/arc42-template/dist/arc42-template-EN-withhelp-html.zip[help-html]
-| http://arc42.github.io/arc42-template/dist/arc42-template-EN-withhelp-asciidoc.zip[help-asciidoc]
-| http://arc42.github.io/arc42-template/dist/arc42-template-EN-withhelp-textile.zip[help-textile]
-
-| ... plus samples | sample-docx         | sample-confluence | sample-pdf | sample-html
-|===
+== Template Downloads
+For template downloads please see the https://github.com/arc42/arc42-template[arc42-template]
+repository or the official download page on http://arc42.org/download.
