@@ -131,7 +131,7 @@ task convert2Latex (
     args = ['-r','docbook',
             '-s',
             '-t','latex',
-            '-o',localBuildDir.latex+'/arc42-template.tex',
+            '-o',localBuildDir.latex+'/arc42-template-'+language+'.tex',
             localBuildDir.docbook+'/arc42-template.xml']
 }
 task convert2Docx (
@@ -141,7 +141,7 @@ task convert2Docx (
     executable = "pandoc"
     args = ['-r','docbook',
             '-t','docx',
-            '-o',localBuildDir.docx+'/arc42-template.docx',
+            '-o',localBuildDir.docx+'/arc42-template-'+language+'.docx',
             localBuildDir.docbook+'/arc42-template.xml']
 }
 task convert2Epub (
@@ -152,7 +152,7 @@ task convert2Epub (
     executable = "pandoc"
     args = ['-r','docbook',
             '-t','epub',
-            '-o',localBuildDir.epub+'/arc42-template.epub',
+            '-o',localBuildDir.epub+'/arc42-template-'+language+'.epub',
         localBuildDir.docbook+'/arc42-template.xml']
 }
 task convert2Markdown (
@@ -163,7 +163,7 @@ task convert2Markdown (
     executable = "pandoc"
     args = ['-r','docbook',
             '-t','markdown',
-            '-o',localBuildDir.markdown+'/arc42-template.md',
+            '-o',localBuildDir.markdown+'/arc42-template-'+language+'.md',
         localBuildDir.docbook+'/arc42-template.xml']
 }
 task convert2MarkdownMP (
