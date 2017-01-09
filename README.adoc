@@ -43,10 +43,19 @@ anything goes :-).  `gradlew createT` is as valid as `gradlew cTFGM`.
 
     gradlew arc42
 
-
++
 This will generate all other formats, i.e. docx and markdown.
 The results are created the `/build` directory.
 
+5. Now you can create the distribution:
+
+    gradlew createDistribution
+
++
+This will create the 'build/dist' directory with all downloadable
+versions, nicely compressed.
+
+    
 === System Requirements
 
 * Java Runtime (everything above 1.7 should work)
