@@ -1,4 +1,4 @@
-= Generator for arc42 Template Formats
+= image:./small-arc42-logo.png[arc42] Generator for Template Formats
 
 If you want to use an arc42 template for your system, you **don't need to use this repo** -
 just use one of the templates you find on http://arc42.org/downloads.
