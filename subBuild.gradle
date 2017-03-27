@@ -45,11 +45,20 @@ tasks.withType(AsciidoctorTask) { docTask ->
 }
 
 task copyAsciidoc (
-        type: Copy,
         description: 'asciidoc is the master, but we copy it to the build directory, too'
 ) {
-    from project.file('./src/.')
-    into localBuildDir.asciidoc
+    doLast {
+        copy {
+            from project.file('./src/.')
+            exclude('arc42-template.adoc')
+            into localBuildDir.asciidoc+"./src/."
+        }
+        copy {
+            from project.file('./src/.')
+            include('arc42-template.adoc')
+            into localBuildDir.asciidoc
+        }
+    }
 }
 defaultTasks 'arc42'
 
