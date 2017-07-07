@@ -18,6 +18,7 @@ formats = [
     'asciidoc': [imageFolder: true],
     'html': [imageFolder: true],
     'epub': [imageFolder: false],
+    'rst': [imageFolder: true],
     'markdown': [imageFolder: true],
     'markdownMP': [imageFolder: true],
     'textile': [imageFolder: true],
