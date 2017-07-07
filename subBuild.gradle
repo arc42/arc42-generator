@@ -164,6 +164,17 @@ task convert2Epub (
             '-o',localBuildDir.epub+'/arc42-template-'+language+'.epub',
         localBuildDir.docbook+'/arc42-template.xml']
 }
+task convert2Rst (
+    dependsOn: [copyImages, generateDocbook ],
+    type: Exec
+) {
+    //commandLine "pandoc -r arc42-template.xml -o arc42-template.docx "
+    executable = "pandoc"
+    args = ['-r','docbook',
+            '-t','rst',
+            '-o',localBuildDir.rst+'/arc42-template-'+language+'.rst',
+        localBuildDir.docbook+'/arc42-template.xml']
+}
 task convert2Markdown (
     dependsOn: [copyImages, generateDocbook ],
     type: Exec
@@ -227,7 +238,7 @@ task export2Confluence (
 
 }
 task arc42(
-    dependsOn: [copyImages, generateHTML, export2Confluence, convert2Latex, convert2Docx, convert2Epub, convert2Markdown, convert2MarkdownMP, convert2Textile, copyAsciidoc],
+    dependsOn: [copyImages, generateHTML, export2Confluence, convert2Latex, convert2Docx, convert2Epub, convert2Rst, convert2Markdown, convert2MarkdownMP, convert2Textile, copyAsciidoc],
     description: 'collects all required tasks for creating arc42 documentation',
     group: 'arc42-template'
 ) << {
