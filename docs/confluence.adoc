@@ -1,8 +1,8 @@
-== How to use asc42 with confluence
+== How to use arc42 with confluence
 
 NOTE: for more information about confluence, see http://www.atlassian.com/confluence
 
-If you want to use confluence as master for your asc42 documentation, simply use the generated confluence 
+If you want to use confluence as master for your arc42 documentation, simply use the generated confluence 
 space which can found at http://confluence.arc42.org/display/LANDINGZON/landing+zone .
 
 If you want to use confluence not as master but for publishing your documentation, check the 
