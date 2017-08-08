@@ -3,7 +3,7 @@
 NOTE: for more information about confluence, see http://www.atlassian.com/confluence
 
 If you want to use confluence as master for your arc42 documentation, simply use the generated confluence 
-space which can found at http://confluence.arc42.org/display/LANDINGZON/landing+zone .
+space which can found at http://arc42.org/download .
 
 If you want to use confluence not as master but for publishing your documentation, check the 
 link:export2confluence.adoc[export2confluence]-module.
