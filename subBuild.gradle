@@ -24,9 +24,6 @@ config.formats.each { format, params ->
 }
 apply plugin: 'asciidoctor'
 
-// empty build task for netbeans
-task build () << {}
-
 // common settings
 tasks.withType(AsciidoctorTask) { docTask ->
     sourceDir = project.file('./src')

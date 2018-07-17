@@ -42,8 +42,6 @@ new File(config.goldenMaster.sourcePath).eachDir { dir ->
         languages << dir.name
     }
 }
-// empty build task for netbeans
-task build () << {}
 
 task createTemplatesFromGoldenMaster (
     description: 'takes the golden master and creates a version with help and without help for each available language',
