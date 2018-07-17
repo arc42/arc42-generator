@@ -29,7 +29,7 @@ In order to create the other formats from the "Golden Master", follow these step
 
 3. Create derived versions from the "Golden Master"
 
-   gradlew createTemplatesFromGoldenMaster
+   ./gradlew createTemplatesFromGoldenMaster
 
 +
 This will extract the "plain" and "with-help"-version from the golden master. You'll find the
@@ -37,11 +37,11 @@ templates in different languages in +build\src_gen+ in AsciiDoc format.
 
 +
 Btw: gradle allows you to "shorten" the command - as long as gradle is still able to guess the command,
-anything goes :-).  `gradlew createT` is as valid as `gradlew cTFGM`.
+anything goes :-).  `./gradlew createT` is as valid as `gradlew cTFGM`.
 
 4. After you have executed the task to create the templates, a new task will become available in gradle:
 
-    gradlew arc42
+    ./gradlew arc42
 
 +
 This will generate all other formats, i.e. docx and markdown.
@@ -49,7 +49,7 @@ The results are created the `/build` directory.
 
 5. Now you can create the distribution:
 
-    gradlew createDistribution
+    ./gradlew createDistribution
 
 +
 This will create the 'arc42-template/dist' directory with all downloadable
