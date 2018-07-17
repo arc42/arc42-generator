@@ -37,7 +37,7 @@ templates in different languages in +build\src_gen+ in AsciiDoc format.
 
 +
 Btw: gradle allows you to "shorten" the command - as long as gradle is still able to guess the command,
-anything goes :-).  `./gradlew createT` is as valid as `gradlew cTFGM`.
+anything goes :-).  `./gradlew createT` is as valid as `./gradlew cTFGM`.
 
 4. After you have executed the task to create the templates, a new task will become available in gradle:
 
