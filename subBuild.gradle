@@ -206,6 +206,40 @@ task convert2MarkdownMP (
         }
     }
 }
+task convert2GitHubMarkdown (
+    dependsOn: [copyImages, generateDocbook ],
+    type: Exec
+) {
+    //commandLine "pandoc -r arc42-template.xml -o arc42-template.docx "
+    executable = "pandoc"
+    args = ['-r','docbook',
+            '-t','gfm',
+            '-o',localBuildDir.gitHubMarkdown+'/arc42-template-'+language+'.md',
+        localBuildDir.docbook+'/arc42-template.xml']
+}
+task convert2GitHubMarkdownMP (
+        dependsOn: [copyImages, generateDocbookMP ]
+) {
+    doLast {
+        def i = 0
+        def sourceFolder = file(localBuildDir.docbook + 'MP/.')
+        sourceFolder.eachFile { myFile ->
+            if (myFile.name.endsWith('.xml')) {
+                def taskName = 'convert2GitHubMarkdown_file' + i++
+                new File(localBuildDir.gitHubmarkdownMP + '/').mkdirs()
+                tasks.create(name: taskName, type: Exec, dependsOn: [copyImages, generateDocbookMP]) {
+                    //commandLine "pandoc -r arc42-template.xml -o arc42-template.docx "
+                    executable = "pandoc"
+                    args = ['-r', 'docbook',
+                            '-t', 'gfm',
+                            '-o', localBuildDir.gitHubMarkdownMP + '/' + myFile.name-'xml'+'md',
+                            myFile.canonicalPath]
+                }
+                tasks."$taskName".execute()
+            }
+        }
+    }
+}
 task convert2Textile (
         dependsOn: [copyImages, generateDocbookMP ]
 ) {
@@ -235,7 +269,7 @@ task export2Confluence (
 
 }
 task arc42(
-    dependsOn: [copyImages, generateHTML, export2Confluence, convert2Latex, convert2Docx, convert2Epub, convert2Rst, convert2Markdown, convert2MarkdownMP, convert2Textile, copyAsciidoc],
+    dependsOn: [copyImages, generateHTML, export2Confluence, convert2Latex, convert2Docx, convert2Epub, convert2Rst, convert2Markdown, convert2MarkdownMP, convert2GitHubMarkdown, convert2GitHubMarkdownMP, convert2Textile, copyAsciidoc],
     description: 'collects all required tasks for creating arc42 documentation',
     group: 'arc42-template'
 ) << {
