@@ -4,9 +4,9 @@ image:
 tasks:
   - command: >
         cd arc42-createTemplate
-        git checkout master
-        git pull
-        cd ..
-        ./gradlew createTemplatesFromGoldenMaster &&
-        ./gradlew arc42 &&
-        ./gradlew createDistribution
+        && git checkout master
+        && git pull
+        && cd ..
+        && ./gradlew createTemplatesFromGoldenMaster
+        && ./gradlew arc42
+        && ./gradlew createDistribution
