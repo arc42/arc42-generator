@@ -48,7 +48,7 @@ task copyAsciidoc (
         copy {
             from project.file('./src/.')
             exclude('arc42-template.adoc')
-            into localBuildDir.asciidoc+"./src/."
+            into localBuildDir.asciidoc+"/src/."
         }
         copy {
             from project.file('./src/.')
