@@ -1,0 +1,5 @@
+image:
+  file: docker/gitpod-pandoc.Dockerfile
+
+tasks:
+  - command: "./gradlew createTemplatesFromGoldenMaster && ./gradlew arc42 && ./gradlew createDistribution"
