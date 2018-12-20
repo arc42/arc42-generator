@@ -19,17 +19,23 @@ In order to create the other formats from the "Golden Master", follow these step
 
 1. open the project with https://gitpod.io image:https://gitpod.io/button/open-in-gitpod.svg[link="https://gitpod.io#https://github.com/arc42/arc42-generator", title="Open in Gitpod"]
 
-or
+This will open gitpod as development environment, clone the project into a docker container and run all needed tasks to generate the various formats.
+You then only have to check the results and do an add/commit/push
+
+or as a manual alternative you can follow these steps:
 
 1. Clone this repository:
 
     git clone git@github.com:arc42/arc42-generator.git
 
-2. Add the "Golden Master" templates by initializing the git submodule
+2. Add the "Golden Master" templates by initializing the git submodule and update them
 
    cd arc42-generator
    git submodule update -i
-
+   cd arc42-template
+   git checkout master
+   git pull
+   cd ..
 
 3. Create derived versions from the "Golden Master"
 
