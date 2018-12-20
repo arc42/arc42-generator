@@ -3,7 +3,7 @@ image:
 
 tasks:
   - command: >
-        cd arc42-createTemplate
+        cd arc42-template
         && git checkout master
         && git pull
         && cd ..
