@@ -2,4 +2,11 @@ image:
   file: docker/gitpod-pandoc.Dockerfile
 
 tasks:
-  - command: "./gradlew createTemplatesFromGoldenMaster && ./gradlew arc42 && ./gradlew createDistribution"
+  - command: >
+        cd arc42-createTemplate
+        git checkout master
+        git pull
+        cd ..
+        ./gradlew createTemplatesFromGoldenMaster &&
+        ./gradlew arc42 &&
+        ./gradlew createDistribution
