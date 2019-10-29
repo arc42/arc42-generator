@@ -263,13 +263,48 @@ task convert2Textile (
         }
     }
 }
+task convert2Textile2 (
+        dependsOn: [copyImages, generateDocbookMP ]
+) {
+    doLast {
+        def i = 0
+        def sourceFolder = file(localBuildDir.docbook + 'MP/.')
+        sourceFolder.eachFile { myFile ->
+            if (myFile.name.endsWith('.xml')) {
+                //rewrite file without <col elements
+                def file = myFile.text
+                def newFile = ""
+                file.eachLine { line ->
+                    if (line ==~/.*<colspec[^>]*>.*/) {
+                        //ignore
+                    } else {
+                        newFile += line + "\n"
+                    }
+                }
+                new File(myFile.canonicalPath+"2").write(newFile)
+                def taskName = 'convert2Textile2_file' + i++
+                new File(localBuildDir.textile2 + '/').mkdirs()
+                println rootDir.canonicalPath+'/width-filter-docBook.lua'
+                tasks.create(name: taskName, type: Exec, dependsOn: [copyImages, generateDocbookMP]) {
+                    //commandLine "pandoc -r arc42-template.xml -o arc42-template.docx "
+                    executable = "pandoc"
+                    args = ['-r', 'docbook',
+                            '-t', 'textile',
+                            '-o', localBuildDir.textile2 + '/'+myFile.name-'xml'+'textile',
+                            myFile.canonicalPath+'2']
+                }
+                tasks."$taskName".execute()
+            }
+        }
+    }
+}
 task export2Confluence (
     dependsOn: [generateHTML]
 ) {
 
 }
 task arc42(
-    dependsOn: [copyImages, generateHTML, export2Confluence, convert2Latex, convert2Docx, convert2Epub, convert2Rst, convert2Markdown, convert2MarkdownMP, convert2GitHubMarkdown, convert2GitHubMarkdownMP, convert2Textile, copyAsciidoc],
+    dependsOn: [copyImages, generateHTML, export2Confluence, convert2Latex, convert2Docx, convert2Epub, convert2Rst, convert2Markdown, convert2MarkdownMP, convert2GitHubMarkdown, convert2GitHubMarkdownMP, convert2Textile, convert2Textile2, copyAsciidoc],
     description: 'collects all required tasks for creating arc42 documentation',
     group: 'arc42-template'
 ) << {

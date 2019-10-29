@@ -24,6 +24,7 @@ formats = [
     'gitHubMarkdown': [imageFolder: true],
     'gitHubMarkdownMP': [imageFolder: true],
     'textile': [imageFolder: true],
+    'textile2': [imageFolder: true],
     'docx': [imageFolder: false],
     'docbook': [imageFolder: true],
     'latex': [imageFolder: true],
