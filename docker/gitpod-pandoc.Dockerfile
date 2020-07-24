@@ -1,4 +1,4 @@
-FROM gitpod/workspace-full:latest
+FROM gitpod/workspace-full:commit-c22653ec89f7ad562d086ad24c26569cc3cb660f
 
 USER root
 # Install custom tools, runtime, etc.
