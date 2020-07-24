@@ -6,7 +6,7 @@ USER root
 
 RUN curl -fsSL "https://get.sdkman.io" | bash \
  && bash -c ". /home/gitpod/.sdkman/bin/sdkman-init.sh \
-             && sdk default 8.0.262-amzn \
+             && sdk default 8.0.262.fx-zulu \
              && sdk flush archives \
              && sdk flush temp"
 
