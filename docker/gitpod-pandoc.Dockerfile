@@ -1,6 +1,15 @@
-FROM gitpod/workspace-full:commit-c22653ec89f7ad562d086ad24c26569cc3cb660f
+FROM gitpod/workspace-full:commit-d4b22db1963f969bcb30caed505c89b5e767a52d
 
 USER root
+
+# fall back java to 8
+
+RUN curl -fsSL "https://get.sdkman.io" | bash \
+ && bash -c ". /home/gitpod/.sdkman/bin/sdkman-init.sh \
+             && sdk default 8.0.262-amzn \
+             && sdk flush archives \
+             && sdk flush temp"
+
 # Install custom tools, runtime, etc.
 RUN apt-get update && apt-get install -y \
         pandoc \
