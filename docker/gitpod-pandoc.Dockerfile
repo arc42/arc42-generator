@@ -2,15 +2,6 @@ FROM gitpod/workspace-full:commit-d4b22db1963f969bcb30caed505c89b5e767a52d
 
 USER root
 
-# fall back java to 8
-
-RUN curl -fsSL "https://get.sdkman.io" | bash \
- && bash -c ". /home/gitpod/.sdkman/bin/sdkman-init.sh \
-             && sdk install 8.0.262.fx-zulu \
-             && sdk default 8.0.262.fx-zulu \
-             && sdk flush archives \
-             && sdk flush temp"
-
 # Install custom tools, runtime, etc.
 RUN apt-get update && apt-get install -y \
         pandoc \
