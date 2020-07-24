@@ -7,6 +7,8 @@ tasks:
         && git checkout master
         && git pull
         && cd ..
+        && sdk install 8.0.262.fx-zulu 
+        && sdk default 8.0.262.fx-zulu 
         && ./gradlew createTemplatesFromGoldenMaster
         && ./gradlew arc42
         && ./gradlew createDistribution
