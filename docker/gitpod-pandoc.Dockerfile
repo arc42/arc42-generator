@@ -8,7 +8,7 @@ USER root
 #    && apt-get clean && rm -rf /var/cache/apt/* && rm -rf /var/lib/apt/lists/* && rm -rf /tmp/*
 
 # apt fetches an old version of pandoc, so let's use another machanism:
-RUN wget https://github.com/jgm/pandoc/releases/download/2.10/pandoc-2.10-1-amd64.de \
+RUN wget https://github.com/jgm/pandoc/releases/download/2.10/pandoc-2.10-1-amd64.deb \
     && dpkg -i pandoc-2.10-1-amd64.deb \
     && rm pandoc-2.10-1-amd64.deb
 
