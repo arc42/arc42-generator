@@ -21,6 +21,8 @@ formats = [
     'rst': [imageFolder: true],
     'markdown': [imageFolder: true],
     'markdownMP': [imageFolder: true],
+    'markdownStrict': [imageFolder: true],
+    'markdownMPStrict': [imageFolder: true],
     'gitHubMarkdown': [imageFolder: true],
     'gitHubMarkdownMP': [imageFolder: true],
     'textile': [imageFolder: true],
