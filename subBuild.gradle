@@ -344,7 +344,7 @@ task export2Confluence (
 
 }
 task arc42(
-    dependsOn: [copyImages, generateHTML, export2Confluence, convert2Latex, convert2Docx, convert2Epub, convert2Rst, convert2Markdown, convert2MarkdownMP, convert2GitHubMarkdown, convert2GitHubMarkdownMP, convert2Textile, convert2Textile2, copyAsciidoc],
+    dependsOn: [copyImages, generateHTML, export2Confluence, convert2Latex, convert2Docx, convert2Epub, convert2Rst, convert2Markdown, convert2MarkdownMP, convert2MarkdownStrict, convert2MarkdownMPStrict, convert2GitHubMarkdown, convert2GitHubMarkdownMP, convert2Textile, convert2Textile2, copyAsciidoc],
     description: 'collects all required tasks for creating arc42 documentation',
     group: 'arc42-template'
 ) << {
