@@ -139,7 +139,12 @@ task convert2Latex (
         '-t','latex',
         '-o',localBuildDir.latex+'/arc42-template-'+language+'.tex',
         localBuildDir.docbook+'/arc42-template.xml']
-
+    if (language=='RU') {
+        args += ['-V','fontenc=T1,T2A']
+    } 
+    System.out.println("*"*80)
+    System.out.println args
+    System.out.println("*"*80)
     doLast {
         def file = new File(localBuildDir.latex+'/arc42-template-'+language+'.tex')
         file.write(file.text.replaceAll("\u2009", " "))
