@@ -9,10 +9,6 @@ buildscript {
     // these are the BUILDSCRIPT deps - required to execute
     // build targets and -operations
     repositories {
-        maven {
-            name 'Bintray Asciidoctor repo'
-            url  'http://dl.bintray.com/content/aalmiray/asciidoctor'
-        }
         jcenter()
         mavenCentral()
     }
