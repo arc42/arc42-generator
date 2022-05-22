@@ -17,7 +17,7 @@ This repository contains a gradle project to convert the golden master into othe
 
 In order to create the other formats from the "Golden Master", follow these steps:
 
-1. open the project with https://gitpod.io image:https://gitpod.io/button/open-in-gitpod.svg[link="https://gitpod.io#https://github.com/arc42/arc42-generator", title="Open in Gitpod"]
+1. open the project with https://gitpod.io image:https://gitpod.io/button/open-in-gitpod.svg[link="https://gitpod.io#https://github.com/arc42/arc42-generator", title="Open in Gitpod", target="_blank"]
 
 This will open gitpod as development environment, clone the project into a docker container and run all needed tasks to generate the various formats.
 You then only have to check the results and do an add/commit/push
