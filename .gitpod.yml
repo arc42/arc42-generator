@@ -17,6 +17,10 @@ tasks:
         && echo "and if ok, add, commit and push it"
         && ./switchToreq42.sh
         && rm -r build
+        && cd req42-framework
+        && git checkout main
+        && git pull
+        && cd ..
         && ./gradlew createTemplatesFromGoldenMaster
         && ./gradlew arc42
         && ./gradlew createDistribution
