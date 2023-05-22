@@ -3,4 +3,4 @@
 	url = https://github.com/arc42/arc42-template.git
 [submodule "req42-framework"]
 	path = req42-framework
-	url = https://github.com/rdmueller/req42-framework.git
+	url = https://github.com/Hruschka/req42-framework.git
