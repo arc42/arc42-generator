@@ -15,14 +15,3 @@ tasks:
         && ./gradlew createDistribution
         && echo "please check the results in arc42-template/dist"
         && echo "and if ok, add, commit and push it"
-        && ./switchToreq42.sh
-        && rm -r build
-        && cd req42-framework
-        && git checkout main
-        && git pull
-        && cd ..
-        && ./gradlew createTemplatesFromGoldenMaster
-        && ./gradlew arc42
-        && ./gradlew createDistribution
-        && echo "please check the results in req42-framework/dist"
-        && echo "and if ok, add, commit and push it"
