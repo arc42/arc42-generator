@@ -22,7 +22,7 @@ config.formats.each { format, params ->
     localBuildDir[format] = globalBuildDir.path + '/'+language+'/'+format+'/' + projectName
     new File(localBuildDir[format]).mkdirs()
 }
-apply plugin: 'asciidoctor'
+apply plugin: "org.asciidoctor.gradle.asciidoctor"
 
 // common settings
 tasks.withType(AsciidoctorTask) { docTask ->
