@@ -9,12 +9,15 @@ buildscript {
     // these are the BUILDSCRIPT deps - required to execute
     // build targets and -operations
     repositories {
-        jcenter()
         mavenCentral()
+        maven {
+            url = "https://plugins.gradle.org/m2/"
+        }
+        jcenter()
     }
 
     dependencies {
-        classpath( 'org.asciidoctor:asciidoctor-gradle-plugin:0.7.0' )
+        classpath( 'org.asciidoctor:asciidoctor-gradle-plugin:0.7.1' )
 
     }
 }
