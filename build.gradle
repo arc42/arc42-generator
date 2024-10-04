@@ -98,6 +98,7 @@ task createTemplatesFromGoldenMaster (
                         from pathToDEGoldenMaster + '/../../images/.'
                         into pathToTarget + '/images'
                         include "**/*-${language}.*"
+                        include "**/*-EN.*"
                         include "**/arc42-logo.png"
                     }
                 }
