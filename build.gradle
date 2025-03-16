@@ -78,6 +78,10 @@ task createTemplatesFromGoldenMaster (
                             featuresToRemove.each { feature ->
                                 template = template.replaceAll(/(?ms)\[role="arc42/ + feature + /"\][ \r\n]+[*]{4}.*?[*]{4}/, '')
                             }
+                            if ("help" in featuresToRemove) {
+                                template = template.replaceAll(/(?ms)ifdef::arc42help\[\]/, '')
+                                template = template.replaceAll(/(?ms)endif::arc42help\[\]/, '')
+                            }
                             targetFile.write(template, 'utf-8')
                         }
                     }
