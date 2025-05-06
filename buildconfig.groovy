@@ -25,6 +25,8 @@ formats = [
     'markdownMPStrict': [imageFolder: true],
     'gitHubMarkdown': [imageFolder: true],
     'gitHubMarkdownMP': [imageFolder: true],
+    'mkdocs': [imageFolder: true],
+    'mkdocsMP': [imageFolder: true],
     'textile': [imageFolder: true],
     'textile2': [imageFolder: true],
     'docx': [imageFolder: false],
