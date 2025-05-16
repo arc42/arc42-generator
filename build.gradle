@@ -123,9 +123,9 @@ task createDistribution (
             config.formats.each { format, params ->
                 def taskName = "createDistributionFor_${language}_${shortName}_$format"
                 tasks.create(name: taskName, type: Zip) {
-                    baseName = "arc42-template-${language}-${shortName}-$format"
-                    archiveName = baseName + '.zip'
-                    destinationDir = file(config.distribution.targetPath)
+                    archiveBaseName = "arc42-template-${language}-${shortName}-$format"
+                    archiveFileName = "${archiveBaseName}.zip"
+                    destinationDirectory = file(config.distribution.targetPath)
                     //archivePath = "$shortName/$format"
                     include "**/*"
                     from "./build/$language/$format/$projectName"
