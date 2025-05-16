@@ -8,8 +8,8 @@ tasks:
         && git pull
         && cd ..
         && sdk selfupdate force
-        && sdk install java 8.0.282.j9-adpt
-        && sdk default java 8.0.282.j9-adpt
+        && sdk install java 17.0.15+6-tem
+        && sdk default java 17.0.15+6-tem
         && ./gradlew createTemplatesFromGoldenMaster
         && ./gradlew arc42
         && ./gradlew createDistribution
