@@ -10,20 +10,11 @@ buildscript {
     // build targets and -operations
     repositories {
         mavenCentral()
-        maven {
-            url = "https://plugins.gradle.org/m2/"
-        }
-/*
-The RepositoryHandler.jcenter() method has been deprecated.
-This is scheduled to be removed in Gradle 8.0.
-JFrog announced JCenter's sunset in February 2021. Use mavenCentral() instead.
-* */
-//        jcenter()
+        gradlePluginPortal()
     }
 
     dependencies {
-        classpath( 'org.asciidoctor:asciidoctor-gradle-plugin:0.7.1' )
-
+        classpath( 'org.asciidoctor.jvm.convert:org.asciidoctor.jvm.convert.gradle.plugin:4.0.4' )
     }
 }
 

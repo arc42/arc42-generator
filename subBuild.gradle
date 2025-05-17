@@ -1,4 +1,4 @@
-import org.asciidoctor.gradle.AsciidoctorTask
+import org.asciidoctor.gradle.jvm.AsciidoctorTask
 
 // // gradle build script for the arc42 template
 // ("plain" subproject, creating the template without help text)
@@ -22,14 +22,18 @@ config.formats.each { format, params ->
     localBuildDir[format] = globalBuildDir + '/'+language+'/'+format+'/' + projectName
     new File(localBuildDir[format]).mkdirs()
 }
-apply plugin: "org.asciidoctor.gradle.asciidoctor"
+
+repositories {
+    mavenCentral()
+    gradlePluginPortal()
+}
+apply plugin: "org.asciidoctor.jvm.convert"
 
 // common settings
 tasks.withType(AsciidoctorTask) { docTask ->
     sourceDir = project.file('./src')
-    options = [
-        logDocuments: true,
-        attributes: [
+
+    attributes(
             toc         : 'left',
             doctype     : 'book',
             icons       : 'font',
@@ -37,8 +41,8 @@ tasks.withType(AsciidoctorTask) { docTask ->
             sectanchors : true,
             numbered    : true,
             imagesdir   : 'images',
-        ]
-    ]
+    )
+    logDocuments true
 }
 
 task copyAsciidoc (
@@ -83,19 +87,29 @@ task generateHTML (
     type: AsciidoctorTask,
     dependsOn: [copyImages, copyAsciidoc],
     description: 'use html5 as asciidoc backend') {
-    sourceDocumentName = project.file('./src/arc42-template.adoc')
+    sources {
+        file("src")
+        include 'arc42-template.adoc'
+    }
     outputDir = new File( localBuildDir.html )
-    backend = 'html5'
+    outputOptions {
+        backends "html5"
+    }
 }
 
 task generateDocbook (
         type: AsciidoctorTask,
         dependsOn: [copyImages, copyAsciidoc],
         description: 'use docbook as asciidoc backend') {
-    sourceDocumentName = project.file('./src/arc42-template.adoc')
+    sources {
+        file("src")
+        include 'arc42-template.adoc'
+    }
     if (localBuildDir.docbook) {
         outputDir = new File(localBuildDir.docbook)
-        backend = 'docbook'
+        outputOptions {
+            backends 'docbook'
+        }
     } else {
         println """
     Failed to generate DocBook
@@ -115,7 +129,9 @@ task generateDocbookMP (
         description: 'use docbook as asciidoc backend') {
     if (localBuildDir.docbook) {
         outputDir = new File(localBuildDir.docbook+'MP')
-        backend = 'docbook'
+        outputOptions {
+            backends 'docbook'
+        }
     } else {
         println """
     Failed to generate markdownMP
@@ -215,7 +231,7 @@ task convert2MarkdownMPStrict (
             if (myFile.name.endsWith('.xml')) {
                 def taskName = 'convert2MarkdownStrict_file' + i++
                 new File(localBuildDir.markdownMPStrict + '/').mkdirs()
-                tasks.create(name: taskName, type: Exec, dependsOn: [copyImages, generateDocbookMP]) {
+                def theTask = tasks.create(name: taskName, type: Exec, dependsOn: [copyImages, generateDocbookMP]) {
                     //commandLine "pandoc -r arc42-template.xml -o arc42-template.docx "
                     executable = "pandoc"
                     args = ['-r', 'docbook',
@@ -223,7 +239,7 @@ task convert2MarkdownMPStrict (
                             '-o', localBuildDir.markdownMPStrict + '/' + myFile.name-'xml'+'md',
                             myFile.canonicalPath]
                 }
-                tasks."$taskName".execute()
+                theTask.mustRunAfter(it)
             }
         }
     }
@@ -238,7 +254,7 @@ task convert2MarkdownMP (
             if (myFile.name.endsWith('.xml')) {
                 def taskName = 'convert2Markdown_file' + i++
                 new File(localBuildDir.markdownMP + '/').mkdirs()
-                tasks.create(name: taskName, type: Exec, dependsOn: [copyImages, generateDocbookMP]) {
+                def theTask = tasks.create(name: taskName, type: Exec, dependsOn: [copyImages, generateDocbookMP]) {
                     //commandLine "pandoc -r arc42-template.xml -o arc42-template.docx "
                     executable = "pandoc"
                     args = ['-r', 'docbook',
@@ -246,7 +262,7 @@ task convert2MarkdownMP (
                             '-o', localBuildDir.markdownMP + '/' + myFile.name-'xml'+'md',
                             myFile.canonicalPath]
                 }
-                tasks."$taskName".execute()
+                theTask.mustRunAfter(it)
             }
         }
     }
@@ -272,7 +288,7 @@ task convert2GitHubMarkdownMP (
             if (myFile.name.endsWith('.xml')) {
                 def taskName = 'convert2GitHubMarkdown_file' + i++
                 new File(localBuildDir.gitHubmarkdownMP + '/').mkdirs()
-                tasks.create(name: taskName, type: Exec, dependsOn: [copyImages, generateDocbookMP]) {
+                def theTask = tasks.create(name: taskName, type: Exec, dependsOn: [copyImages, generateDocbookMP]) {
                     //commandLine "pandoc -r arc42-template.xml -o arc42-template.docx "
                     executable = "pandoc"
                     args = ['-r', 'docbook',
@@ -280,7 +296,7 @@ task convert2GitHubMarkdownMP (
                             '-o', localBuildDir.gitHubMarkdownMP + '/' + myFile.name-'xml'+'md',
                             myFile.canonicalPath]
                 }
-                tasks."$taskName".execute()
+                theTask.mustRunAfter(it)
             }
         }
     }
@@ -295,7 +311,7 @@ task convert2Textile (
             if (myFile.name.endsWith('.xml')) {
                 def taskName = 'convert2Textile_file' + i++
                 new File(localBuildDir.textile + '/').mkdirs()
-                tasks.create(name: taskName, type: Exec, dependsOn: [copyImages, generateDocbookMP]) {
+                def theTask = tasks.create(name: taskName, type: Exec, dependsOn: [copyImages, generateDocbookMP]) {
                     //commandLine "pandoc -r arc42-template.xml -o arc42-template.docx "
                     executable = "pandoc"
                     args = ['-r', 'docbook',
@@ -303,7 +319,7 @@ task convert2Textile (
                             '-o', localBuildDir.textile + '/'+myFile.name-'xml'+'textile',
                             myFile.canonicalPath]
                 }
-                tasks."$taskName".execute()
+                theTask.mustRunAfter(it)
             }
         }
     }
@@ -330,7 +346,7 @@ task convert2Textile2 (
                 def taskName = 'convert2Textile2_file' + i++
                 new File(localBuildDir.textile2 + '/').mkdirs()
                 println rootDir.canonicalPath+'/width-filter-docBook.lua'
-                tasks.create(name: taskName, type: Exec, dependsOn: [copyImages, generateDocbookMP]) {
+                def theTask = tasks.create(name: taskName, type: Exec, dependsOn: [copyImages, generateDocbookMP]) {
                     //commandLine "pandoc -r arc42-template.xml -o arc42-template.docx "
                     executable = "pandoc"
                     args = ['-r', 'docbook',
@@ -338,7 +354,7 @@ task convert2Textile2 (
                             '-o', localBuildDir.textile2 + '/'+myFile.name-'xml'+'textile',
                             myFile.canonicalPath+'2']
                 }
-                tasks."$taskName".execute()
+                theTask.mustRunAfter(it)
             }
         }
     }
