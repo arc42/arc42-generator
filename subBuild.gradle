@@ -16,10 +16,10 @@ def projectName = '%TYPE%'
 //}
 logger.info "*"*80
 logger.info project.name
-logger.info globalBuildDir.path
+logger.info globalBuildDir
 
 config.formats.each { format, params ->
-    localBuildDir[format] = globalBuildDir.path + '/'+language+'/'+format+'/' + projectName
+    localBuildDir[format] = globalBuildDir + '/'+language+'/'+format+'/' + projectName
     new File(localBuildDir[format]).mkdirs()
 }
 apply plugin: "org.asciidoctor.gradle.asciidoctor"
@@ -352,7 +352,9 @@ task arc42(
     dependsOn: [copyImages, generateHTML, export2Confluence, convert2Latex, convert2Docx, convert2Epub, convert2Rst, convert2Markdown, convert2MarkdownMP, convert2MarkdownStrict, convert2MarkdownMPStrict, convert2GitHubMarkdown, convert2GitHubMarkdownMP, convert2Textile, convert2Textile2, copyAsciidoc],
     description: 'collects all required tasks for creating arc42 documentation',
     group: 'arc42-template'
-) << {
-    println "globalBuildDir = ${globalBuildDir}"
-    println "localBuildDir = ${localBuildDir}"
+) {
+    doLast {
+        println "globalBuildDir = ${globalBuildDir}"
+        println "localBuildDir = ${localBuildDir}"
+    }
 }

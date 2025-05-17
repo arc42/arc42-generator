@@ -29,9 +29,10 @@ JFrog announced JCenter's sunset in February 2021. Use mavenCentral() instead.
 
 
 // set common output directory for all subprojects
-project.ext.globalBuildDir = layout.buildDirectory
+def buildDirectory = layout.buildDirectory.get()
+project.ext.globalBuildDir = buildDirectory.asFile.canonicalPath
 
-logger.info "globalBuildDir = "+globalBuildDir
+logger.info "globalBuildDir = ${globalBuildDir}"
 
 project.description = """
 ${'='*80}
@@ -74,7 +75,7 @@ task createTemplatesFromGoldenMaster (
                 def target = file(pathToTarget + '/src/.')
                 target.mkdirs()
                 logger.info "                     to ${target.path}"
-                logger.lifecycle "create %buildDir%${target.path - layout.buildDirectory}"
+                logger.lifecycle "create %buildDir%${target.path - buildDirectory}"
                 [sourceMain,sourceSub].each { source ->
                     source.eachFile { sourceFile ->
                         if (sourceFile.name.endsWith('.adoc') || sourceFile.name.endsWith('.config')) {
