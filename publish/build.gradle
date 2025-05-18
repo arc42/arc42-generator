@@ -2,7 +2,12 @@ buildscript {
     repositories {
         mavenLocal()
         mavenCentral()
-        jcenter()
+/*
+The RepositoryHandler.jcenter() method has been deprecated.
+This is scheduled to be removed in Gradle 8.0.
+JFrog announced JCenter's sunset in February 2021. Use mavenCentral() instead.
+* */
+//        jcenter()
     }
 
     dependencies {

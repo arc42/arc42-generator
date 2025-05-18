@@ -23,10 +23,6 @@ This will open gitpod as development environment, clone the project into a docke
 You then only have to check the results and do an add/commit/push
 
 or as a manual alternative you can follow these steps:
-
-0. Downgrade java to Java 8
-
-    sdk install java 8.0.282.j9-adpt
     
 1. Clone this repository:
 
