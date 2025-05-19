@@ -24,7 +24,7 @@ if (target.exists()) {
                     .replaceAll('%LANG%', language)
                     .replaceAll('%TYPE%', docFormat)
                 )
-            def projectIdentifier = "${language}:${docFormat}"
+            def projectIdentifier = ("${f.parentFile.path}" - "${layout.rootDirectory.asFile.path}/").replaceAll("/",":")
             logger.info "include subproject ${projectIdentifier} in ${parentFilePath}"
             include(projectIdentifier)
             project(":${projectIdentifier}").projectDir = new File(parentFilePath)
