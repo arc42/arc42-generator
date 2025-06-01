@@ -15,14 +15,19 @@ if (target.exists()) {
     logger.info f.name
         if (f.name == 'src') {
 	        //copy build file
-	        new File(f.parentFile.path+"/build.gradle")
+            def parentFilePath = f.parentFile.path
+            def language = parentFilePath.split('[/\\\\]')[-3]
+            def docFormat = parentFilePath.split('[/\\\\]')[-1]
+            new File(parentFilePath +"/build.gradle")
                 .write(
                     new File("subBuild.gradle").text
-                    .replaceAll('%LANG%',f.parentFile.path.split('[/\\\\]')[-3])
-                    .replaceAll('%TYPE%',f.parentFile.path.split('[/\\\\]')[-1])
+                    .replaceAll('%LANG%', language)
+                    .replaceAll('%TYPE%', docFormat)
                 )
-            logger.info "include subproject " + f.parentFile.path-rootProject.projectDir.path
-            include f.parentFile.path+'/'-rootProject.projectDir.path
+            def projectIdentifier = "${language}:${docFormat}"
+            logger.info "include subproject ${projectIdentifier} in ${parentFilePath}"
+            include(projectIdentifier)
+            project(":${projectIdentifier}").projectDir = new File(parentFilePath)
         }
     }
 }
