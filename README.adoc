@@ -23,6 +23,9 @@ This will open gitpod as development environment, clone the project into a docke
 You then only have to check the results and do an add/commit/push
 
 or as a manual alternative you can follow these steps:
+
+**Prerequisites:** Make sure you have Java and http://pandoc.org[pandoc] installed on your system.
+On Ubuntu/Debian: `sudo apt install pandoc`. On macOS: `brew install pandoc`. On Windows: download from pandoc.org.
     
 1. Clone this repository:
 
