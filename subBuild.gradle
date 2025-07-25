@@ -40,6 +40,10 @@ tasks.withType(AsciidoctorTask) { docTask ->
             sectlink    : true,
             sectanchors : true,
             numbered    : true,
+            revnumber   : '%REVNUMBER%',
+            revdate     : '%REVDATE%',
+            revremark   : '%REVREMARK%',
+
             imagesdir   : 'images',
     )
     logDocuments true

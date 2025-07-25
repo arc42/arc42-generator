@@ -39,6 +39,7 @@ new File(config.goldenMaster.sourcePath).eachDir { dir ->
     }
 }
 
+
 task createTemplatesFromGoldenMaster (
     description: 'takes the golden master and creates a version with help and without help for each available language',
     group: 'arc42-template'
@@ -58,6 +59,12 @@ task createTemplatesFromGoldenMaster (
                 from config.goldenMaster.sourcePath + '/common/.'
                 into pathToGoldenMaster + '/common'
             }
+            //copy version properties
+            copy {
+                from config.goldenMaster.sourcePath + '/' + language + '/version.properties'
+                into config.goldenMaster.targetPath + '/' + language + '/.'
+            }
+            println "copy version.properties from ${config.goldenMaster.sourcePath + '/' + language + '/version.properties'} to ${config.goldenMaster.targetPath + '/' + language + '/version.properties'}"
             def sourceSub = file(pathToGoldenMaster+'/src/.')
             def sourceMain = file(pathToGoldenMaster+'/.')
             logger.info "copy golden master from ${sourceMain.path} ..."
@@ -124,7 +131,7 @@ task createDistribution (
             def shortName = projectName.replaceAll("^.*[/\\\\]", "").replaceAll("[^a-zA-Z]", "")
             config.formats.each { format, params ->
                 def taskName = "createDistributionFor_${language}_${shortName}_$format"
-                println "name: $taskName"
+                // println "name: $taskName"
                 tasks.create(name: taskName, type: Zip) {
                     // ✅ Korrekt: .set() verwenden für Property-Objekte
                     archiveBaseName.set("req42-framework-${language}-${shortName}-$format")
