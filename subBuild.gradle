@@ -88,8 +88,8 @@ task generateHTML (
     type: AsciidoctorTask,
     dependsOn: [copyImages, copyAsciidoc],
     description: 'use html5 as asciidoc backend') {
+    sourceDir = file("src")
     sources {
-        file("src")
         include 'arc42-template.adoc'
     }
     outputDir = new File( localBuildDir.html )
@@ -102,8 +102,8 @@ task generateDocbook (
         type: AsciidoctorTask,
         dependsOn: [copyImages, copyAsciidoc],
         description: 'use docbook as asciidoc backend') {
+    sourceDir = file("src")
     sources {
-        file("src")
         include 'arc42-template.adoc'
     }
     if (localBuildDir.docbook) {
