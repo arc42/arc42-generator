@@ -53,6 +53,11 @@ task createTemplatesFromGoldenMaster (
         logger.lifecycle "found templates in the following languages: "+languages
         languages.each { language ->
             def pathToGoldenMaster = config.goldenMaster.sourcePath + '/' + language + '/asciidoc/'
+            //copy common asciidoc files from the golden master to the target directory
+            copy {
+                from config.goldenMaster.sourcePath + '/common/.'
+                into pathToGoldenMaster + '/common'
+            }
             def sourceSub = file(pathToGoldenMaster+'/src/.')
             def sourceMain = file(pathToGoldenMaster+'/.')
             logger.info "copy golden master from ${sourceMain.path} ..."
@@ -123,9 +128,9 @@ task createDistribution (
                 tasks.create(name: taskName, type: Zip) {
                     // ✅ Korrekt: .set() verwenden für Property-Objekte
                     archiveBaseName.set("req42-framework-${language}-${shortName}-$format")
-                    println "basename: ${archiveBaseName.get()}"
+                    // println "basename: ${archiveBaseName.get()}"
                     archiveFileName.set("${archiveBaseName.get()}.zip")
-                    println "arcname: ${archiveFileName.get()}"
+                    // println "arcname: ${archiveFileName.get()}"
                     destinationDirectory.set(file(config.distribution.targetPath))
                     
                     include "**/*"
