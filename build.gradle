@@ -27,7 +27,7 @@ logger.info "globalBuildDir = ${globalBuildDir}"
 
 project.description = """
 ${'='*80}
-This project builds a set of different arc42-templates from the golden master (asciidoc)
+This project builds a set of different req42-frameworks from the golden master (asciidoc)
 ${'='*80}
 """
 
@@ -42,7 +42,7 @@ new File(config.goldenMaster.sourcePath).eachDir { dir ->
 
 task createTemplatesFromGoldenMaster (
     description: 'takes the golden master and creates a version with help and without help for each available language',
-    group: 'arc42-template'
+    group: 'req42-framework'
 )  {
 
     inputs.dir  file(config.goldenMaster.sourcePath)
@@ -86,10 +86,13 @@ task createTemplatesFromGoldenMaster (
                             def template = sourceFile.getText('utf-8')
                             featuresToRemove.each { feature ->
                                 template = template.replaceAll(/(?ms)\[role="arc42/ + feature + /"\][ \r\n]+[*]{4}.*?[*]{4}/, '')
+                                template = template.replaceAll(/(?ms)\[role="req42/ + feature + /"\][ \r\n]+[*]{4}.*?[*]{4}/, '')
                             }
                             if ("help" in featuresToRemove) {
                                 template = template.replaceAll(/(?ms)ifdef::arc42help\[\]/, '')
                                 template = template.replaceAll(/(?ms)endif::arc42help\[\]/, '')
+                                template = template.replaceAll(/(?ms)ifdef::req42help\[\]/, '')
+                                template = template.replaceAll(/(?ms)endif::req42help\[\]/, '')
                             }
                             targetFile.write(template, 'utf-8')
                         }
@@ -123,7 +126,7 @@ task createTemplatesFromGoldenMaster (
 task createDistribution (
     dependsOn: [],
     description: 'bundles the converted templates into downloadable zip files',
-    group: 'arc42-template'
+    group: 'req42-framework'
 ) {
     outputs.dir file(config.distribution.targetPath)
     languages.each { language ->
