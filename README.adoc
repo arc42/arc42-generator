@@ -19,13 +19,13 @@ To create the other formats from the "Golden Master", you can now use GitHub Cod
 
 1. Open the project in a GitHub Codespace:
 
-     - In the GitHub repository, click on "Code" and then "Codespaces" → "Create codespace on master".
-     - The Codespace will start a cloud development environment.
-     - In the Codespace terminal, run:
+- In the GitHub repository, click on "Code" and then "Codespaces" → "Create codespace on master".
+- The Codespace will start a cloud development environment.
+- In the Codespace terminal, run:
 
          ./build-arc42.sh
 
-     This will automatically generate all required formats. The results can be found in the `/build` directory.
+This will automatically generate all required formats. The results can be found in the `/build` directory.
 
 Alternatively, you can follow these manual steps on your local machine:
     
