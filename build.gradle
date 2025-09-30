@@ -140,7 +140,7 @@ task createDistribution (
                 // println "name: $taskName"
                 tasks.create(name: taskName, type: Zip) {
                     // ✅ Korrekt: .set() verwenden für Property-Objekte
-                    archiveBaseName.set("arc42-framework-${language}-${shortName}-$format")
+                    archiveBaseName.set("arc42-template-${language}-${shortName}-$format")
                     // println "basename: ${archiveBaseName.get()}"
                     archiveFileName.set("${archiveBaseName.get()}.zip")
                     // println "arcname: ${archiveFileName.get()}"
