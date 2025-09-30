@@ -55,15 +55,10 @@ task createTemplatesFromGoldenMaster (
         languages.each { language ->
             def pathToGoldenMaster = config.goldenMaster.sourcePath + '/' + language + '/asciidoc/'
             //copy common asciidoc files from the golden master to the target directory
-            println "copy common files from ${config.goldenMaster.sourcePath + '/common/.'} to ${pathToGoldenMaster + '/common'}"
-            copy {
-                from config.goldenMaster.sourcePath + '/common/.'
-                into pathToGoldenMaster + '/common'
-            }
             println "copy common files from ${config.goldenMaster.sourcePath + '/common/.'} to ${config.goldenMaster.targetPath + '/common'}"
             copy {
                 from config.goldenMaster.sourcePath + '/common/.'
-                into config.goldenMaster.targetPath + '/common/.'
+                into config.goldenMaster.targetPath + language + '/common/.'
             }
             //copy version properties
             copy {
