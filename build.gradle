@@ -38,7 +38,7 @@ new File(config.goldenMaster.sourcePath).eachDir { dir ->
         languages << dir.name
     }
 }
-
+languages=['DE','EN']
 
 task createTemplatesFromGoldenMaster (
     description: 'takes the golden master and creates a version with help and without help for each available language',
@@ -55,14 +55,20 @@ task createTemplatesFromGoldenMaster (
         languages.each { language ->
             def pathToGoldenMaster = config.goldenMaster.sourcePath + '/' + language + '/asciidoc/'
             //copy common asciidoc files from the golden master to the target directory
+            println "copy common files from ${config.goldenMaster.sourcePath + '/common/.'} to ${pathToGoldenMaster + '/common'}"
             copy {
                 from config.goldenMaster.sourcePath + '/common/.'
                 into pathToGoldenMaster + '/common'
             }
+            println "copy common files from ${config.goldenMaster.sourcePath + '/common/.'} to ${config.goldenMaster.targetPath + '/common'}"
+            copy {
+                from config.goldenMaster.sourcePath + '/common/.'
+                into config.goldenMaster.targetPath + '/common/.'
+            }
             //copy version properties
             copy {
-                from config.goldenMaster.sourcePath + '/' + language + '/version.properties'
-                into config.goldenMaster.targetPath + '/' + language + '/.'
+                from config.goldenMaster.sourcePath + '' + language + '/version.properties'
+                into config.goldenMaster.targetPath + '' + language + '/.'
             }
             println "copy version.properties from ${config.goldenMaster.sourcePath + '/' + language + '/version.properties'} to ${config.goldenMaster.targetPath + '/' + language + '/version.properties'}"
             def sourceSub = file(pathToGoldenMaster+'/src/.')
