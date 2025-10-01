@@ -38,7 +38,7 @@ new File(config.goldenMaster.sourcePath).eachDir { dir ->
         languages << dir.name
     }
 }
-languages=['DE','EN']
+languages=['DE','EN', 'FR', 'CZ']
 
 task createTemplatesFromGoldenMaster (
     description: 'takes the golden master and creates a version with help and without help for each available language',
