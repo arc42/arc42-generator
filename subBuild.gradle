@@ -229,12 +229,11 @@ task convert2MarkdownStrict (
 task convert2MarkdownMPStrict (
         dependsOn: [copyImages, generateDocbookMP ]
 ) {
-    doLast {
-        def i = 0
-        def sourceFolder = file(localBuildDir.docbook + 'MP/.')
+    def sourceFolder = file(localBuildDir.docbook + 'MP/.')
+    if (sourceFolder.exists()) {
         sourceFolder.eachFile { myFile ->
             if (myFile.name.endsWith('.xml')) {
-                def taskName = 'convert2MarkdownStrict_file' + i++
+                def taskName = 'convert2MarkdownMPStrict_file_' + myFile.name-'.xml'
                 new File(localBuildDir.markdownMPStrict + '/').mkdirs()
                 def theTask = tasks.create(name: taskName, type: Exec, dependsOn: [copyImages, generateDocbookMP]) {
                     //commandLine "pandoc -r arc42-template.xml -o arc42-template.docx "
@@ -244,7 +243,7 @@ task convert2MarkdownMPStrict (
                             '-o', localBuildDir.markdownMPStrict + '/' + myFile.name-'xml'+'md',
                             myFile.canonicalPath]
                 }
-                theTask.mustRunAfter(it)
+                it.finalizedBy(theTask)
             }
         }
     }
@@ -252,12 +251,11 @@ task convert2MarkdownMPStrict (
 task convert2MarkdownMP (
         dependsOn: [copyImages, generateDocbookMP ]
 ) {
-    doLast {
-        def i = 0
-        def sourceFolder = file(localBuildDir.docbook + 'MP/.')
+    def sourceFolder = file(localBuildDir.docbook + 'MP/.')
+    if (sourceFolder.exists()) {
         sourceFolder.eachFile { myFile ->
             if (myFile.name.endsWith('.xml')) {
-                def taskName = 'convert2Markdown_file' + i++
+                def taskName = 'convert2MarkdownMP_file' + myFile.name-'.xml'
                 new File(localBuildDir.markdownMP + '/').mkdirs()
                 def theTask = tasks.create(name: taskName, type: Exec, dependsOn: [copyImages, generateDocbookMP]) {
                     //commandLine "pandoc -r arc42-template.xml -o arc42-template.docx "
@@ -267,7 +265,7 @@ task convert2MarkdownMP (
                             '-o', localBuildDir.markdownMP + '/' + myFile.name-'xml'+'md',
                             myFile.canonicalPath]
                 }
-                theTask.mustRunAfter(it)
+                it.finalizedBy(theTask)
             }
         }
     }
@@ -286,25 +284,25 @@ task convert2GitHubMarkdown (
 task convert2GitHubMarkdownMP (
         dependsOn: [copyImages, generateDocbookMP ]
 ) {
-    doLast {
-        def i = 0
-        def sourceFolder = file(localBuildDir.docbook + 'MP/.')
+    
+    def sourceFolder = file(localBuildDir.docbook + 'MP/.')
+    if (sourceFolder.exists()) {
         sourceFolder.eachFile { myFile ->
             if (myFile.name.endsWith('.xml')) {
-                def taskName = 'convert2GitHubMarkdown_file' + i++
+                def taskName = 'convert2GitHubMarkdownMP_' + myFile.name - '.xml'
                 new File(localBuildDir.gitHubmarkdownMP + '/').mkdirs()
                 def theTask = tasks.create(name: taskName, type: Exec, dependsOn: [copyImages, generateDocbookMP]) {
-                    //commandLine "pandoc -r arc42-template.xml -o arc42-template.docx "
                     executable = "pandoc"
                     args = ['-r', 'docbook',
                             '-t', 'gfm',
                             '-o', localBuildDir.gitHubMarkdownMP + '/' + myFile.name-'xml'+'md',
                             myFile.canonicalPath]
                 }
-                theTask.mustRunAfter(it)
+                it.finalizedBy(theTask)
             }
         }
     }
+    
 }
 task convert2Mkdocs (
     dependsOn: [copyImages, generateDocbook ],
@@ -369,13 +367,13 @@ task convert2Mkdocs (
 task convert2MkdocsMP (
         dependsOn: [copyImages, generateDocbookMP ]
 ) {
-    doLast {
-        def i = 0
-        def sourceFolder = file(localBuildDir.docbook + 'MP/.')
-        def lastFileTask = null
+    def sourceFolder = file(localBuildDir.docbook + 'MP/.')
+    def lastFileTask = null
+    def fileTasks = []
+    if(sourceFolder.exists()) {
         sourceFolder.eachFile { myFile ->
             if (myFile.name.endsWith('.xml')) {
-                def taskName = 'convert2Mkdocs_file' + i++
+                def taskName = 'convert2MkdocsMP_file_' + myFile.name - '.xml'
                 new File(localBuildDir.mkdocsMP + '/docs/').mkdirs()
                 new File(localBuildDir.mkdocsMP + '/mkdocs.yml')
                     .write("""  |site_name: Arc42 Template
@@ -403,65 +401,58 @@ task convert2MkdocsMP (
                                 |    - navigation.indexes
                                 |    - toc.follow
                                 |""".stripMargin())
+                def outfile = myFile.name-'xml'+'md'
+                if (myFile.name == "arc42-template.xml") {
+                    outfile = 'index.md'
+                }
                 def theTask = tasks.create(name: taskName, type: Exec, dependsOn: [copyImages, generateDocbookMP]) {
-                    //commandLine "pandoc -r arc42-template.xml -o arc42-template.docx "
-                    def outfile = myFile.name-'xml'+'md'
-                    if (myFile.name == "arc42-template.xml") {
-                        outfile = 'index.md'
-                    }
-
-                    // FIXME remove this and keep the next block
-                    def sout = new StringBuilder(), serr = new StringBuilder()
-                    def proc = ('pandoc -r docbook -t markdown_phpextra --toc --wrap=none --reference-links -o ' + localBuildDir.mkdocsMP + '/docs/' + outfile + ' ' + myFile.canonicalPath).execute()
-                    proc.consumeProcessOutput(sout, serr)
-                    proc.waitForOrKill(1000)
-
-                    // was not working for me in any MP task
-                    // FIXME keep this block and remove previous one
-                    /*executable = "pandoc"
+                    executable = "pandoc"
                     args = ['-r', 'docbook',
                             '-t', 'markdown_phpextra',
                             '--toc',                   // Include table of contents
                             '--wrap=none',             // No text wrapping
                             '--reference-links',       // Use reference-style links
                             '-o', localBuildDir.mkdocsMP + '/docs/' + outfile,
-                            myFile.canonicalPath]*/
+                            myFile.canonicalPath]
                 }
                 lastFileTask = theTask
-                theTask.mustRunAfter(it)
+                it.finalizedBy(theTask)
+                fileTasks.add(theTask)
             }
         }
-        def thePostTask = tasks.create(name: "convert2Mkdocs_post", type: Exec, dependsOn: [copyImages, generateDocbookMP]) {
-            new File(localBuildDir.mkdocsMP + '/docs/config.md').delete()
-            new File(localBuildDir.mkdocsMP + '/docs/about-arc42.md').delete()
-            def indexFile = new File(localBuildDir.mkdocsMP + '/docs/index.md')
-            def indexHeader = indexFile.getText('UTF-8').split(">.").first().substring(1).trim() + ">.\n\n"
-            indexFile.withWriter('UTF-8') { out ->
-                out.write(indexHeader)
-                new File(localBuildDir.mkdocsMP + "/docs/.").eachFile {
-                    if (it.name != "index.md") {
-                        def title = new File(localBuildDir.mkdocsMP + "/docs/" + it.name).withReader { it.readLine() }
-                        if (title.startsWith("#")) {
-                            title = title.split("[#{]+")[1].trim()
-                            out.write("\n0. [${title}](${it.name})\n")
+        def thePostTask = tasks.create(name: "convert2Mkdocs_post", dependsOn: [copyImages, generateDocbookMP]) {
+            doLast {
+                new File(localBuildDir.mkdocsMP + '/docs/config.md').delete()
+                new File(localBuildDir.mkdocsMP + '/docs/about-arc42.md').delete()
+                def indexFile = new File(localBuildDir.mkdocsMP + '/docs/index.md')
+                def indexHeader = indexFile.getText('UTF-8').split(">.").first().substring(1).trim() + ">.\n\n"
+                indexFile.withWriter('UTF-8') { out ->
+                    out.write(indexHeader)
+                    new File(localBuildDir.mkdocsMP + "/docs/.").eachFile {
+                        if (it.name != "index.md") {
+                            def title = new File(localBuildDir.mkdocsMP + "/docs/" + it.name).withReader { it.readLine() }
+                            if (title.startsWith("#")) {
+                                title = title.split("[#{]+")[1].trim()
+                                out.write("\n0. [${title}](${it.name})\n")
+                            }
                         }
                     }
                 }
             }
         }
-        thePostTask.mustRunAfter(lastFileTask)
+        thePostTask.mustRunAfter(fileTasks)
+        lastFileTask.finalizedBy(thePostTask)
     }
 }
 
 task convert2Textile (
         dependsOn: [copyImages, generateDocbookMP ]
 ) {
-    doLast {
-        def i = 0
-        def sourceFolder = file(localBuildDir.docbook + 'MP/.')
+    def sourceFolder = file(localBuildDir.docbook + 'MP/.')
+    if(sourceFolder.exists()) {
         sourceFolder.eachFile { myFile ->
             if (myFile.name.endsWith('.xml')) {
-                def taskName = 'convert2Textile_file' + i++
+                def taskName = 'convert2Textile_file' + myFile.name-'.xml'
                 new File(localBuildDir.textile + '/').mkdirs()
                 def theTask = tasks.create(name: taskName, type: Exec, dependsOn: [copyImages, generateDocbookMP]) {
                     //commandLine "pandoc -r arc42-template.xml -o arc42-template.docx "
@@ -471,7 +462,7 @@ task convert2Textile (
                             '-o', localBuildDir.textile + '/'+myFile.name-'xml'+'textile',
                             myFile.canonicalPath]
                 }
-                theTask.mustRunAfter(it)
+                it.finalizedBy(theTask)
             }
         }
     }
@@ -479,9 +470,8 @@ task convert2Textile (
 task convert2Textile2 (
         dependsOn: [copyImages, generateDocbookMP ]
 ) {
-    doLast {
-        def i = 0
-        def sourceFolder = file(localBuildDir.docbook + 'MP/.')
+    def sourceFolder = file(localBuildDir.docbook + 'MP/.')
+    if(sourceFolder.exists()) {
         sourceFolder.eachFile { myFile ->
             if (myFile.name.endsWith('.xml')) {
                 //rewrite file without <col elements
@@ -495,9 +485,9 @@ task convert2Textile2 (
                     }
                 }
                 new File(myFile.canonicalPath+"2").write(newFile)
-                def taskName = 'convert2Textile2_file' + i++
+                def taskName = 'convert2Textile2_file_' + myFile.name-'.xml'
                 new File(localBuildDir.textile2 + '/').mkdirs()
-                println rootDir.canonicalPath+'/width-filter-docBook.lua'
+                //println rootDir.canonicalPath+'/width-filter-docBook.lua'
                 def theTask = tasks.create(name: taskName, type: Exec, dependsOn: [copyImages, generateDocbookMP]) {
                     //commandLine "pandoc -r arc42-template.xml -o arc42-template.docx "
                     executable = "pandoc"
@@ -506,7 +496,7 @@ task convert2Textile2 (
                             '-o', localBuildDir.textile2 + '/'+myFile.name-'xml'+'textile',
                             myFile.canonicalPath+'2']
                 }
-                theTask.mustRunAfter(it)
+                it.finalizedBy(theTask)
             }
         }
     }
@@ -517,8 +507,8 @@ task export2Confluence (
 
 }
 task arc42(
-    dependsOn: [copyImages, generateHTML, export2Confluence, convert2Latex, convert2Docx, convert2Epub, convert2Rst, convert2Markdown, convert2MarkdownMP, convert2MarkdownStrict, convert2MarkdownMPStrict, convert2GitHubMarkdown, convert2GitHubMarkdownMP, convert2Mkdocs, convert2MkdocsMP, convert2Textile, convert2Textile2, copyAsciidoc],
-    description: 'collects all required tasks for creating arc42 documentation',
+    dependsOn: [copyImages, generateHTML, generateDocbook, copyAsciidoc, export2Confluence, convert2Latex, convert2Docx, convert2Epub, convert2Rst, convert2Markdown, convert2MarkdownStrict, convert2GitHubMarkdown, convert2Mkdocs, generateDocbookMP],
+    description: 'collects all required tasks for creating arc42 single page documentation',
     group: 'arc42-template'
 ) {
     doLast {
@@ -526,3 +516,14 @@ task arc42(
         println "localBuildDir = ${localBuildDir}"
     }
 }
+task arc42MP(
+    dependsOn: [convert2MarkdownMP, convert2MarkdownMPStrict, convert2GitHubMarkdownMP, convert2MkdocsMP, convert2Textile, convert2Textile2],
+    description: 'collects all required tasks for creating arc42 multipage documentation. Requires "generateDocbookMP" task to have been run beforehand!',
+    group: 'arc42-template'
+) {
+    doLast {
+        println "globalBuildDir = ${globalBuildDir}"
+        println "localBuildDir = ${localBuildDir}"
+    }
+}
+

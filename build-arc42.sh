@@ -11,7 +11,13 @@ git pull
 cd ..
 echo "build arc42 template"
 ./gradlew createTemplatesFromGoldenMaster
+echo "convert to other singlepage formats"
 ./gradlew arc42
+echo "generate docbook multipage format"
+./gradlew generateDocbookMP
+echo "convert docbook multipage to other multipage formats"
+./gradlew arc42MP
+echo "create distributions"
 ./gradlew createDistribution
 echo "please check the results in arc42-template/dist"
 echo "and if ok, add, commit and push it"
