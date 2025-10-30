@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is the **arc42-generator** project, a Gradle-based build system that converts the arc42 architecture documentation template from its "Golden Master" format (AsciiDoc) into multiple output formats (HTML, PDF, Markdown, DOCX, etc.) in multiple languages.
+This is the **arc42-generator** project, a Groovy-based build system that converts the arc42 architecture documentation template from its "Golden Master" format (AsciiDoc) into multiple output formats (HTML, PDF, Markdown, DOCX, etc.) in multiple languages.
 
 The actual template content lives in the `arc42-template` git submodule (the "Golden Master"). This generator project transforms that content into various formats for distribution.
 
@@ -29,86 +29,174 @@ This script handles everything: installs pandoc, updates submodules, and runs th
 
 ### Manual Build Steps
 ```bash
-# 1. Generate templates from golden master (creates build/src_gen/)
-./gradlew createTemplatesFromGoldenMaster
+# Full build (all phases)
+groovy build.groovy
 
-# 2. Convert templates to all output formats (creates build/<LANG>/<FORMAT>/)
-./gradlew arc42
+# Individual phases
+groovy build.groovy templates      # Phase 1: Generate templates from golden master
+groovy build.groovy convert        # Phases 2-3: Discover + convert templates
+groovy build.groovy distribution   # Phase 4: Create distribution ZIP files
 
-# 3. Create distribution ZIP files (creates arc42-template/dist/)
-./gradlew createDistribution
+# Format-specific build (faster)
+groovy build.groovy --format=html  # Build only HTML format
 ```
 
-### Gradle Command Shortcuts
-Gradle allows command abbreviation: `./gradlew createT` or `./gradlew cTFGM` work the same as `./gradlew createTemplatesFromGoldenMaster`.
+### CLI Options
+- **Phase selection**: `templates`, `convert`, `distribution`, or `all` (default)
+- **Format filter**: `--format=html` (only convert to specified format)
+- **Parallel control**: `--parallel=false` (disable parallel execution)
 
 ## Architecture
 
 ### Build Pipeline Flow
 1. **Golden Master** (`arc42-template/` submodule) → Contains source AsciiDoc templates with feature flags
-2. **Template Generation** (`createTemplatesFromGoldenMaster`) → Strips feature flags to create "plain" and "with-help" versions in `build/src_gen/`
-3. **Format Conversion** (`arc42` task) → Converts AsciiDoc to HTML, Markdown, DOCX, etc. using Pandoc
-4. **Distribution** (`createDistribution`) → Packages everything into ZIP files for download
+2. **Template Generation** (`lib/Templates.groovy`) → Strips feature flags to create "plain" and "with-help" versions in `build/src_gen/`
+3. **Template Discovery** (`lib/Discovery.groovy`) → Scans generated templates and extracts metadata
+4. **Format Conversion** (`lib/Converter.groovy`) → Converts AsciiDoc to HTML, Markdown, DOCX, etc. using AsciidoctorJ and Pandoc
+5. **Distribution** (`lib/Packager.groovy`) → Packages everything into ZIP files for download
+
+### Core Components
+
+#### `build.groovy` (235 lines)
+Main orchestration script that ties everything together. Supports CLI arguments for phase selection and format filtering.
+
+#### `lib/Templates.groovy` (265 lines)
+- **Language Auto-Discovery**: Scans `arc42-template/` for language directories matching `/^[A-Z]{2}$/`
+- **Feature Flag Removal**: Uses regex patterns to strip `[role="arc42help"]` blocks and `ifdef::arc42help` statements
+- **Template Generation**: Creates 18 template variants (9 languages × 2 styles)
+
+**Performance**: Generates templates in ~10s (vs ~30s with Gradle)
+
+#### `lib/Discovery.groovy` (220 lines)
+- **Template Scanning**: Discovers all generated templates in `build/src_gen/`
+- **Metadata Extraction**: Reads version.properties, counts .adoc files, validates structure
+- **Query API**: Find templates by language, style, or both
+
+#### `lib/Converter.groovy` (420 lines)
+- **AsciidoctorJ Integration**: Direct HTML and DocBook conversion
+- **Pandoc Integration**: Two-step conversion (AsciiDoc → DocBook → target format)
+- **Parallel Execution**: Uses GParsPool for true parallel conversion (5-10x faster than Gradle)
+- **Supported Formats**: html, asciidoc, docbook, markdown, docx, epub, latex, and more
+
+**Performance**: Converts 18 templates to HTML in ~6s (vs ~45s with Gradle)
+
+#### `lib/Packager.groovy` (205 lines)
+- **ZIP Creation**: Packages templates + images into distribution archives
+- **Parallel Execution**: Creates all ZIPs concurrently
+- **Output**: `arc42-template/dist/*.zip` files ready for distribution
+
+**Performance**: Creates 18 ZIPs in ~0.6s (vs ~15s with Gradle)
 
 ### Key Configuration Files
 - **buildconfig.groovy**: Defines template styles, output formats, and paths
   - `templateStyles`: `plain` (no help), `with-help` (includes help text)
   - `formats`: 15+ output formats including asciidoc, html, markdown, docx, epub, latex, etc.
-- **build.gradle**: Main build orchestration, creates dynamic subprojects
-- **subBuild.gradle**: Template for generated subproject build files (gets copied with placeholders replaced)
-- **settings.gradle**: Dynamically discovers and includes subprojects from `build/src_gen/`
+  - `goldenMaster`: Path to arc42-template submodule
 
 ### Supported Languages
-Currently: DE (German), EN (English), FR (French), CZ (Czech)
-See `build.gradle:41` for the language list.
+**Auto-discovered**: CZ, DE, EN, ES, FR, IT, NL, PT, RU (9 languages)
+
+The system automatically discovers all language directories in `arc42-template/` that match the pattern `/^[A-Z]{2}$/`. No hardcoding required.
 
 ### Format Conversion Strategy
-- AsciiDoc → HTML: Direct conversion via Asciidoctor Gradle plugin
-- AsciiDoc → Other formats: Two-step process
-  1. AsciiDoc → DocBook XML (via Asciidoctor)
+- **AsciiDoc → HTML**: Direct conversion via AsciidoctorJ
+- **AsciiDoc → Other formats**: Two-step process
+  1. AsciiDoc → DocBook XML (via AsciidoctorJ)
   2. DocBook → Target format (via Pandoc)
-- Multi-page formats (markdownMP, mkdocsMP, etc.) split the template into separate files
-
-### Dynamic Subproject Generation
-The build system dynamically creates Gradle subprojects for each language/format combination:
-- `settings.gradle` scans `build/src_gen/` after `createTemplatesFromGoldenMaster` runs
-- For each `src/` directory found, creates a subproject like `EN:plain` or `DE:with-help`
-- Copies `subBuild.gradle` → `build.gradle` with placeholders replaced (%LANG%, %TYPE%, version info)
+- **Multi-page formats**: markdownMP, mkdocsMP, etc. split the template into separate files
 
 ### Feature Flag System
 The Golden Master uses AsciiDoc role attributes to mark content:
 - `[role="arc42help"]` - Help text (explanations, tips)
 - `[role="arc42example"]` - Example content (currently unused)
-- `createTemplatesFromGoldenMaster` removes unwanted features using regex to create template variants
+- `lib/Templates.groovy` removes unwanted features using regex to create template variants
+
+### Performance Comparison
+**Full HTML Build** (18 templates):
+- **Groovy**: 17.4s (template generation + conversion + packaging)
+- **Gradle**: ~90s
+- **Speedup**: 5.2x faster
+
+**Why Faster**:
+1. True parallel execution with GParsPool (better CPU utilization)
+2. No Gradle initialization overhead
+3. Direct library calls (AsciidoctorJ, Pandoc)
+4. Simpler architecture (no chicken-and-egg problems)
 
 ## System Requirements
-- **Java Runtime**: Version 1.7 or higher (tested with modern JDKs)
-- **Pandoc**: Version 1.12.4.2 or higher required for format conversions
+- **Groovy**: Version 4.0 or higher (tested with Groovy 5.0.2)
+  - Install via SDKMAN: `sdk install groovy`
+- **Java Runtime**: Version 11 or higher (tested with OpenJDK 21)
+- **Pandoc**: Version 3.0 or higher required for format conversions (tested with 3.7.0.2)
   - Install on Debian/Ubuntu: `wget <pandoc-deb-url> && sudo dpkg -i <pandoc-deb>`
-  - See `build-arc42.sh:3-4` for current recommended version
+  - `build-arc42.sh` auto-installs Pandoc if missing
 
 ## Output Locations
 - `build/src_gen/`: Generated AsciiDoc templates (plain, with-help variants)
 - `build/<LANG>/<FORMAT>/`: Converted templates by language and format
 - `arc42-template/dist/`: Final distribution ZIP files ready for upload
 
+## Testing
+
+### Automated Test Suite
+```bash
+# Run all integration tests
+groovy run-all-tests.groovy
+
+# Run individual test suites
+groovy test-templates.groovy   # Test template generation
+groovy test-discovery.groovy   # Test template discovery
+groovy test-converter.groovy   # Test format conversion
+```
+
+The test suite validates:
+- Language auto-discovery (finds all 9 languages)
+- Feature flag removal (regex patterns)
+- Template generation (output structure, file counts)
+- Format conversion (HTML, DocBook, Markdown, DOCX)
+- Output comparison with baseline
+
 ## Common Development Scenarios
 
 ### Adding a New Language
-1. Add language code to `build.gradle:41` (e.g., add 'ES' for Spanish)
-2. Ensure corresponding folder exists in `arc42-template/<LANG>/` submodule
-3. Run full build pipeline
+1. Create language folder in `arc42-template/<LANG>/` submodule (must match `/^[A-Z]{2}$/`)
+2. Add template content (AsciiDoc files)
+3. Run `groovy build.groovy` - language will be auto-discovered
+4. No code changes needed!
 
 ### Adding a New Output Format
-1. Add format to `buildconfig.groovy` formats map with `imageFolder` setting
-2. Add conversion task in `subBuild.gradle` (follow existing patterns)
-3. Add task dependency to `arc42` task in `subBuild.gradle:520`
+1. Add format to `buildconfig.groovy` formats map:
+   ```groovy
+   myformat: [imageFolder: true]  // or false if no images needed
+   ```
+2. Add conversion method in `lib/Converter.groovy`:
+   ```groovy
+   String convertToMyFormat(Map template, String outputDir) {
+       // Implement conversion logic
+   }
+   ```
+3. Update `convertAll()` method to handle new format
+4. Test with `groovy build.groovy --format=myformat`
 
 ### Testing Single Format/Language
 ```bash
-# After createTemplatesFromGoldenMaster, run specific subproject
-./gradlew :EN:plain:generateHTML
-./gradlew :DE:with-help:convert2Markdown
+# Test template generation only
+groovy build.groovy templates
+
+# Test specific format conversion
+groovy build.groovy --format=html
+
+# Full build
+groovy build.groovy
+```
+
+### Debugging Conversion Issues
+```bash
+# Run with verbose AsciidoctorJ output
+# Edit lib/Converter.groovy and set logLevel in Options to DEBUG
+
+# Test single template conversion
+groovy test-converter.groovy  # Tests EN:plain template
 ```
 
 ## Git Workflow
