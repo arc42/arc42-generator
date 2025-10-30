@@ -10,13 +10,15 @@
  * 2. Create templates from Golden Master (Templates.groovy)
  * 3. Discover generated templates (Discovery.groovy)
  * 4. Convert templates to all formats (Converter.groovy)
+ * 5. Create ZIP distributions (Packager.groovy)
  *
  * Usage:
- *   groovy build.groovy                    # Full build (all steps)
- *   groovy build.groovy templates          # Only generate templates
- *   groovy build.groovy convert            # Only convert (assumes templates exist)
- *   groovy build.groovy convert --format=html  # Convert to specific format only
- *   groovy build.groovy --parallel=false   # Disable parallel execution
+ *   groovy build.groovy                         # Full build (all steps)
+ *   groovy build.groovy templates               # Only generate templates
+ *   groovy build.groovy convert                 # Only convert (assumes templates exist)
+ *   groovy build.groovy distribution            # Only create distributions
+ *   groovy build.groovy convert --format=html   # Convert to specific format only
+ *   groovy build.groovy --parallel=false        # Disable parallel execution
  */
 
 // ============================================================================
@@ -93,6 +95,7 @@ def gcl = new GroovyClassLoader()
 def templatesClass
 def discoveryClass
 def converterClass
+def packagerClass
 
 try {
     templatesClass = gcl.parseClass(new File('lib/Templates.groovy'))
@@ -103,6 +106,9 @@ try {
 
     converterClass = gcl.parseClass(new File('lib/Converter.groovy'))
     println "✓ Loaded Converter.groovy"
+
+    packagerClass = gcl.parseClass(new File('lib/Packager.groovy'))
+    println "✓ Loaded Packager.groovy"
     println ""
 } catch (Exception e) {
     println "✗ Failed to load helper classes: ${e.message}"
@@ -114,6 +120,7 @@ try {
 def templates = templatesClass.newInstance(config, projectRoot)
 def discovery = discoveryClass.newInstance(config, projectRoot)
 def converter = converterClass.newInstance(config, projectRoot)
+def packager = packagerClass.newInstance(config, projectRoot)
 
 // ============================================================================
 // Phase 1: Generate Templates from Golden Master
@@ -166,6 +173,29 @@ if (targetPhase in ['all', 'convert']) {
 
     } catch (Exception e) {
         println "\n✗ Conversion failed: ${e.message}"
+        e.printStackTrace()
+        System.exit(1)
+    }
+}
+
+// ============================================================================
+// Phase 4: Create ZIP Distributions
+// ============================================================================
+
+if (targetPhase in ['all', 'distribution']) {
+    try {
+        // Discover templates if not already done
+        if (discoveredTemplates.isEmpty()) {
+            println "=== Discovering Templates ==="
+            discoveredTemplates = discovery.discoverTemplates()
+        }
+
+        def formatsToPackage = targetFormat ? [targetFormat] : (config.formats.keySet() as List)
+
+        packager.createAllDistributions(discoveredTemplates, formatsToPackage, useParallel)
+
+    } catch (Exception e) {
+        println "\n✗ Distribution creation failed: ${e.message}"
         e.printStackTrace()
         System.exit(1)
     }
