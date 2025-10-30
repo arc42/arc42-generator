@@ -88,6 +88,7 @@ try {
     println "✓ Test 7 passed\n"
 
     println "=== All Tests Passed! ==="
+    System.exit(0)
 
 } catch (Exception e) {
     println "\n✗ Test failed with error:"

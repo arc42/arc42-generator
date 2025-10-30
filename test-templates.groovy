@@ -75,6 +75,7 @@ This text should also remain.
     println "\n✓ Test 4 passed\n"
 
     println "=== All Tests Passed! ==="
+    System.exit(0)
 
 } catch (Exception e) {
     println "\n✗ Test failed with error:"
