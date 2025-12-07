@@ -14,6 +14,7 @@ class Discovery {
 
     def config
     def projectRoot
+    def cachedTemplates = null  // Cache for discovered templates
 
     Discovery(config, projectRoot = new File('.')) {
         this.config = config
@@ -37,6 +38,11 @@ class Discovery {
      *         [language: 'EN', style: 'plain', sourcePath: '...', hasImages: true, ...]
      */
     List<Map> discoverTemplates() {
+        // Return cached templates if available
+        if (cachedTemplates != null) {
+            return cachedTemplates
+        }
+
         def srcGenPath = new File(projectRoot, config.goldenMaster.targetPath)
 
         if (!srcGenPath.exists()) {
@@ -136,7 +142,16 @@ class Discovery {
         println "Total templates: ${templates.size()}"
         println ""
 
+        // Cache the discovered templates
+        cachedTemplates = templates
         return templates
+    }
+
+    /**
+     * Clear the cached templates to force a fresh discovery on next call
+     */
+    void clearCache() {
+        cachedTemplates = null
     }
 
     /**

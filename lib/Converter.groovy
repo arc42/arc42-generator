@@ -177,7 +177,9 @@ class Converter {
         }
 
         // Add standalone flag for most formats
-        if (format in ['latex', 'rst', 'markdown', 'markdownStrict', 'gitHubMarkdown']) {
+        if (format in ['latex', 'rst', 'markdown', 'markdownMP', 'markdownStrict',
+                       'markdownMPStrict', 'gitHubMarkdown', 'gitHubMarkdownMP',
+                       'mkdocs', 'mkdocsMP']) {
             pandocArgs.add(1, '-s')  // Insert after 'pandoc'
         }
 

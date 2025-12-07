@@ -28,15 +28,28 @@ To create the other formats from the "Golden Master", you can now use GitHub Cod
 This will automatically generate all required formats. The results can be found in the `/build` directory.
 
 Alternatively, you can follow these manual steps on your local machine:
-    
-1. Clone this repository:
+
+1. Clone this repository with submodules:
+
++
+**Option A** - Clone with automatic submodule initialization:
+
+    git clone --recurse-submodules git@github.com:arc42/arc42-generator.git
+
++
+**Option B** - Clone first, then initialize submodules manually:
 
     git clone git@github.com:arc42/arc42-generator.git
+    cd arc42-generator
+    git submodule update --init --recursive
 
-2. Add the "Golden Master" templates by initializing the git submodule and update them
++
+**Important**: This repository uses git submodules for the arc42-template (Golden Master).
+The submodules are **not automatically initialized** with a regular `git clone`. You must use
+`--recurse-submodules` when cloning, or run `git submodule update --init --recursive` afterwards.
 
-   cd arc42-generator
-   git submodule update -i
+2. Update the "Golden Master" to the latest version (optional):
+
    cd arc42-template
    git checkout master
    git pull
