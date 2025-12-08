@@ -13,102 +13,69 @@ the **Golden-Master**
 == How to use this Project
 
 
-This repository contains a Groovy-based build system to convert the golden master into other formats. The build system uses standalone Groovy scripts for template generation, format conversion, and distribution packaging.
 
-To create the other formats from the "Golden Master", you can now use GitHub Codespaces:
+This repository enthält ein Groovy-basiertes Build-System, das mit Standalone-Groovy-Skripten und dem Shell-Skript `build-arc42.sh` arbeitet. Gradle wird nicht mehr benötigt.
 
-1. Open the project in a GitHub Codespace:
+**Empfohlener Weg:**
 
-- In the GitHub repository, click on "Code" and then "Codespaces" → "Create codespace on master".
-- The Codespace will start a cloud development environment.
-- In the Codespace terminal, run:
-
-         ./build-arc42.sh
-
-This will automatically generate all required formats. The results can be found in the `/build` directory.
-
-Alternatively, you can follow these manual steps on your local machine:
-
-1. Clone this repository with submodules:
-
-+
-**Option A** - Clone with automatic submodule initialization:
+1. Klone dieses Repository inkl. Submodule:
 
     git clone --recurse-submodules git@github.com:arc42/arc42-generator.git
 
-+
-**Option B** - Clone first, then initialize submodules manually:
-
-    git clone git@github.com:arc42/arc42-generator.git
-    cd arc42-generator
-    git submodule update --init --recursive
-
-+
-**Important**: This repository uses git submodules for the arc42-template (Golden Master).
-The submodules are **not automatically initialized** with a regular `git clone`. You must use
-`--recurse-submodules` when cloning, or run `git submodule update --init --recursive` afterwards.
-
-2. Update the "Golden Master" to the latest version (optional):
-
-   cd arc42-template
-   git checkout master
-   git pull
-   cd ..
-
-3. Create derived versions from the "Golden Master"
-
-   groovy build.groovy templates
-
-+
-This will extract the "plain" and "with-help"-version from the golden master. You'll find the
-templates in different languages in +build\src_gen+ in AsciiDoc format. The system automatically
-discovers all available languages (currently 9: CZ, DE, EN, ES, FR, IT, NL, PT, RU).
-
-4. Convert templates to other formats:
-
-    groovy build.groovy convert
-
-+
-This will generate all other formats, i.e. HTML, docx, and markdown.
-The results are created in the `/build` directory, organized by language and format.
-
-5. Now you can create the distribution:
-
-    groovy build.groovy distribution
-
-+
-This will create the 'arc42-template/dist' directory with all downloadable
-versions, nicely compressed as ZIP files.
-
-+
-**Shortcut**: Run all three phases at once with:
-
-    groovy build.groovy
-
-+
-Or run the automated script that also handles Pandoc installation and submodule updates:
+2. Starte den Build-Prozess (installiert automatisch Pandoc, aktualisiert Submodule, baut alles):
 
     ./build-arc42.sh
 
-6. Now you should cross-check, test, verify the generated files :-)
+    Die Ergebnisse findest du im `/build`-Verzeichnis.
 
-7. Finally you can commit and push these to the arc42-template repository:
 
+== Build im Docker-Container
+
+Zum Bauen ohne lokale Installation von Java, Groovy oder Pandoc:
+
+    docker-compose up
+
+Das aktuelle Verzeichnis wird als Volume eingebunden. Die Ergebnisse landen im lokalen `build/`-Ordner.
+
+**Oder manuell:**
+
+1. Submodule ggf. initialisieren:
+    cd arc42-generator
+    git submodule update --init --recursive
+
+2. Golden Master aktualisieren (optional):
     cd arc42-template
-    git commit -m "<commit comment>" *.zip
-    git push https://github.com/arc42/arc42-template.git
+    git checkout master
+    git pull
+    cd ..
+
+3. Templates generieren:
+    groovy build.groovy templates
+
+4. Formate konvertieren:
+    groovy build.groovy convert
+
+5. Distribution erzeugen:
+    groovy build.groovy distribution
+
+**Shortcut:**
+    groovy build.groovy
+
+**Hinweis:** Das Skript `build-arc42.sh` erledigt alle Schritte automatisch und installiert Pandoc (Version 3.7.0.2) falls nötig.
+
+Die Templates werden in verschiedenen Sprachen unter `build/src_gen` im AsciiDoc-Format generiert. Das System erkennt verfügbare Sprachen automatisch. Nach erfolgreichem Build können die ZIPs im Template-Repo committet werden.
 
 
-=== System Requirements
 
-* http://groovy-lang.org[Groovy] version 4.0 or higher (tested with 5.0.2)
-  - Install via https://sdkman.io[SDKMAN]: `sdk install groovy`
-* Java Runtime (version 11 or higher recommended, tested with OpenJDK 21)
-* http://pandoc.org[pandoc] installed with version 3.0 or higher (tested with 3.7.0.2)
-  - The `build-arc42.sh` script will automatically install Pandoc if missing
+=== Systemanforderungen
 
-As some of the build steps require **locally installed additional tools**
-(like Groovy and Pandoc), you might encounter errors if these are missing on your system.
+* http://groovy-lang.org[Groovy] Version 4.0 oder höher (getestet mit 5.0.2)
+    - Installation z. B. via https://sdkman.io[SDKMAN]: `sdk install groovy`
+* Java Runtime (mindestens Version 11, getestet mit OpenJDK 21)
+* http://pandoc.org[Pandoc] Version 3.0 oder höher (getestet mit 3.7.0.2)
+    - Das Skript `build-arc42.sh` installiert Pandoc automatisch, falls nicht vorhanden
+
+Falls Tools fehlen, bricht der Build mit einer Fehlermeldung ab.
 
 
 == General Requirements

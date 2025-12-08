@@ -23,61 +23,57 @@ This document provides a structured 4-week learning journey for new senior devel
 
 2. **Environment Setup**:
    ```bash
-   git clone https://github.com/arc42/arc42-generator.git
+   git clone --recurse-submodules https://github.com/arc42/arc42-generator.git
    cd arc42-generator
-   git submodule init
-   git submodule update
+   # Optional: Submodule aktualisieren
+   git submodule update --init --recursive
    cd arc42-template
    git checkout master
+   git pull
    cd ..
    ```
 
-3. **Verify Prerequisites**:
+3. **Voraussetzungen prüfen**:
    ```bash
-   java -version  # Should be 1.7+
-   ./gradlew --version
+   java -version  # Sollte 11+ sein
+   groovy --version  # Sollte 4+ sein
+   # Pandoc wird automatisch installiert
    ```
 
 #### Day 2: First Build
-1. **Run Automated Build**:
+1. **Automatisierten Build ausführen**:
    ```bash
    ./build-arc42.sh
    ```
 
-   Watch output carefully. Understand what each phase does.
+   Die Ausgaben zeigen die einzelnen Phasen. Prüfe, ob Fehler auftreten.
 
-2. **Explore Results**:
+2. **Ergebnisse erkunden**:
    ```bash
    ls -R build/src_gen/EN/asciidoc/
    ls -R build/EN/html/
    ls arc42-template/dist/
    ```
 
-3. **Open Generated Templates**:
-   - Open `build/EN/html/plain/arc42-template.html` in browser
-   - Open `arc42-template/dist/arc42-template-EN-plain-docx.zip`, extract, view DOCX
+3. **Generierte Templates öffnen**:
+   - Öffne `build/EN/html/plain/arc42-template.html` im Browser
+   - Öffne `arc42-template/dist/arc42-template-EN-plain-docx.zip`, entpacke und prüfe die DOCX
 
 #### Day 3: Understanding the Pipeline
 1. **Read**: [05-building-blocks.md](../arc42/05-building-blocks.md)
    - Focus on "Build Phases (Temporal View)"
 
-2. **Manual Build Steps** (to understand phases):
+2. **Manuelle Build-Schritte** (zum Verständnis der Phasen):
    ```bash
    rm -rf build/  # Clean slate
-   ./gradlew createTemplatesFromGoldenMaster
-   # Observe: build/src_gen/ created
+   groovy build.groovy templates
+   # build/src_gen/ wird erzeugt
 
-   ./gradlew projects
-   # Observe: Subprojects discovered
+   groovy build.groovy convert
+   # Formate werden erzeugt
 
-   ./gradlew :EN:plain:generateHTML
-   # Observe: Single format for single language/style
-
-   ./gradlew arc42
-   # Observe: All formats generated
-
-   ./gradlew createDistribution
-   # Observe: ZIPs in arc42-template/dist/
+   groovy build.groovy distribution
+   # ZIPs in arc42-template/dist/
    ```
 
 #### Day 4: Architecture Overview

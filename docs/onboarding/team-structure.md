@@ -4,22 +4,22 @@
 
 *Note: This section documents knowledge areas. Actual person assignments should be filled in by current team.*
 
-### Build System Architecture
-**Knowledge Area**: Gradle build system, dynamic subproject generation, task orchestration
 
-**Key Skills**:
-- Gradle DSL and build lifecycle
-- Dynamic project structure
-- Groovy scripting
-- Settings.gradle mechanics
+### Build-System-Architektur
+**Wissensbereich**: Groovy-Skripte, dynamische Generierung, Build-Orchestrierung
+
+**Wichtige Skills**:
+- Groovy-Scripting und Build-Logik
+- Dynamische Projektstruktur
+- Shell-Skripte (z. B. build-arc42.sh)
+- Konfigurationsdateien (buildconfig.groovy)
 
 **Code Ownership**:
-- `build.gradle`
-- `settings.gradle`
-- `subBuild.gradle`
 - `buildconfig.groovy`
+- `build.groovy`
 
-**Learning Resources**:
+
+**Lernressourcen**:
 - [05-building-blocks.md](../arc42/05-building-blocks.md)
 - [ADR-002](../arc42/09-decisions/ADR-002-dynamic-subproject-generation.md)
 - [Concepts: Dynamic Subproject Generation](../arc42/08-concepts.md#concept-5-dynamic-subproject-generation)
