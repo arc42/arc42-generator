@@ -116,7 +116,10 @@ class Discovery {
                 def versionProps = [:]
                 if (versionFile.exists()) {
                     def props = new Properties()
-                    versionFile.withInputStream { props.load(it) }
+                    versionFile.withInputStream { stream ->
+                        // Use UTF-8 encoding to properly read version.properties
+                        props.load(new InputStreamReader(stream, 'UTF-8'))
+                    }
                     versionProps = props
                 }
 

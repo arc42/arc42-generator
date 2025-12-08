@@ -150,6 +150,22 @@ class Converter {
         new File(docbookDir).mkdirs()
         def docbookFile = convertToDocBook(template, docbookDir.replace(projectRoot.path + '/', ''), false)
 
+        // Copy images to DocBook directory so Pandoc can find them
+        if (template.hasImages) {
+            def sourceImagesDir = new File(template.imagesDir)
+            def targetImagesDir = new File(docbookDir, 'images')
+            targetImagesDir.mkdirs()
+            
+            sourceImagesDir.eachFileRecurse { file ->
+                if (file.isFile()) {
+                    def relativePath = file.absolutePath - sourceImagesDir.absolutePath
+                    def targetFile = new File(targetImagesDir, relativePath)
+                    targetFile.parentFile.mkdirs()
+                    targetFile.bytes = file.bytes
+                }
+            }
+        }
+
         // Determine output file extension and Pandoc target format
         def formatConfig = getPandocConfig(format)
         def outputFileName = "arc42-template-${language}.${formatConfig.extension}"
@@ -157,13 +173,14 @@ class Converter {
         outputFileDir.mkdirs()
         def outputFile = new File(outputFileDir, outputFileName)
 
-        // Build Pandoc command
+        // Build Pandoc command - use relative path to DocBook file since we'll run from docbookDir
+        def docbookFileName = "arc42-template.xml"
         def pandocArgs = [
             'pandoc',
             '-r', 'docbook',
             '-t', formatConfig.pandocFormat,
             '-o', outputFile.absolutePath,
-            docbookFile
+            docbookFileName
         ]
 
         // Add format-specific arguments
@@ -183,8 +200,17 @@ class Converter {
             pandocArgs.add(1, '-s')  // Insert after 'pandoc'
         }
 
-        // Execute Pandoc
-        def process = pandocArgs.execute()
+        // Execute Pandoc with UTF-8 environment
+        // IMPORTANT: Run from docbook directory so Pandoc can find relative image paths
+        def processBuilder = new ProcessBuilder(pandocArgs)
+        processBuilder.directory(new File(docbookDir))
+        
+        // Set UTF-8 encoding in environment
+        def env = processBuilder.environment()
+        env['LC_ALL'] = 'en_US.UTF-8'
+        env['LANG'] = 'en_US.UTF-8'
+        
+        def process = processBuilder.start()
         process.waitFor()
 
         if (process.exitValue() != 0) {
@@ -194,8 +220,18 @@ class Converter {
 
         // Post-processing for LaTeX (fix unicode characters)
         if (format == 'latex') {
-            def content = outputFile.text
-            outputFile.write(content.replaceAll("\u2009", " "))
+            def content = outputFile.getText('utf-8')
+            outputFile.write(content.replaceAll("\u2009", " "), 'utf-8')
+        }
+        
+        // Ensure UTF-8 charset is properly set in HTML output
+        if (format == 'html') {
+            def content = outputFile.getText('utf-8')
+            // Add UTF-8 charset meta tag if not present
+            if (!content.contains('charset')) {
+                content = content.replaceFirst('<head>', '<head>\n<meta charset="UTF-8">')
+                outputFile.write(content, 'utf-8')
+            }
         }
 
         return outputFile.absolutePath
@@ -213,14 +249,20 @@ class Converter {
         srcDir.eachFile { file ->
             if (file.name != 'arc42-template.adoc') {
                 def targetFile = new File(targetSrcDir, file.name)
-                targetFile.bytes = file.bytes
+                targetFile.write(file.getText('utf-8'), 'utf-8')
             }
         }
 
-        // Copy main template to root of output
+        // Copy main template to root of output, adjusting include paths
         def mainFile = new File(template.mainFile)
+        def mainContent = mainFile.getText('utf-8')
+        
+        // Adjust include paths for AsciiDoc output:
+        // - Files are in src/ subdirectory, so references need src/ prefix
+        mainContent = mainContent.replaceAll('include::', 'include::src/')
+        
         def targetMainFile = new File(projectRoot, "${outputDir}/arc42-template.adoc")
-        targetMainFile.bytes = mainFile.bytes
+        targetMainFile.write(mainContent, 'utf-8')
 
         return targetMainFile.absolutePath
     }
@@ -279,6 +321,7 @@ class Converter {
      */
     Map getPandocConfig(String format) {
         def configs = [
+            'html': [pandocFormat: 'html5', extension: 'html', args: ['-M', 'charset=utf-8']],
             'markdown': [pandocFormat: 'markdown', extension: 'md', args: []],
             'markdownMP': [pandocFormat: 'markdown', extension: 'md', args: []],
             'markdownStrict': [pandocFormat: 'markdown_strict', extension: 'md', args: []],

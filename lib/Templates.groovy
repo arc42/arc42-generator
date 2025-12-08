@@ -196,7 +196,7 @@ class Templates {
 
             if (versionSource.exists()) {
                 versionTarget.parentFile.mkdirs()
-                versionTarget.bytes = versionSource.bytes
+                versionTarget.write(versionSource.getText('utf-8'), 'utf-8')
                 println "  ✓ Copied version.properties"
             }
 
