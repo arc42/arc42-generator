@@ -13,9 +13,7 @@
 
 :confluence-link: https://www.atlassian.com/software/confluence[Confluence (C)]
 :asciidoc-link: http://asciidoctor.org[AsciiDoctor]
-:gradle-link: http://gradleware.org[Gradle]
-:stackoverflow-link: http://stackoverflow.com/tags/arc42/info[Stackoverflow]
-:nabble-link: http://arc42-discussion.1007769.n3.nabble.com/[forum]
+
 
 :peter-link: http://b-agile.de[Peter Hruschka]
 :gernot-link: http://gernotstarke.de[Gernot Starke]
@@ -34,9 +32,10 @@ Within the following text, the "arc42 template" shall be abbreviated +arc42+
 
 <<usage, Usage:>>:: Stakeholders and their perspective on +arc42+.
 
-<<formats, Formats:>>:: Technical formats, like MS-Word (C) (docx), pdf, html or others.
 
-<<toolchains, Toolchains:>>:: Tools supported to apply +arc42+ or maintain <<formats>> or <<versions>>
+<<formats, Formats:>>:: Technische Formate, wie MS-Word (docx), PDF, HTML oder andere.
+
+<<toolchains, Toolchains:>>:: Tools und Skripte, die +arc42+ anwenden oder <<formats>>/<<versions>> erzeugen (z. B. Groovy, Shell, Pandoc)
 
 <<versions, Versions:>>:: Content versions, e.g. the pure structure, with help content, with examples etc.
 Versions can be available in various <<formats>>.
@@ -99,9 +98,7 @@ User:: works on a software system, needs to communicate or document
 architectural aspects (decisions, structures, concepts, requirements etc) of
 this system.
 
-Contributor:: support and improve <<formats, template formats>>,
-<<versions>>, <<toolchains, toolchains>> and/or content. Help to answer questions on
-{stackoverflow-link} or {nabble-link} or fix bugs.
+Contributor:: Unterstützt und verbessert <<formats, template formats>>, <<versions>>, <<toolchains, toolchains>> und/oder Inhalte. Meldet Fehler oder trägt zu Übersetzungen bei.
 
 Founders:: {peter-link} and {gernot-link}
 ensure conceptual integrity of the arc42 ecosystem.
@@ -198,10 +195,8 @@ restrictions. Please note - there is no guarantee!
 
 
 
-== Technical Constraints
+== Technische Rahmenbedingungen
 
-
-* Generation of formats shall be automated as much as possible
-* Build of <<out_formats, output formats>> can be done with
-  ** {gradle-link} (first priority)
-  ** others, if demand arises
+* Die Generierung der Formate soll so weit wie möglich automatisiert sein
+* Der Build der <<out_formats, Ausgabeformate>> erfolgt mit Groovy-Skripten und Shell (z. B. `build-arc42.sh`)
+* Weitere Tools (z. B. Pandoc) werden automatisiert installiert und genutzt

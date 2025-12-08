@@ -4,49 +4,47 @@
 
 ---
 
-## Issue 1: "Task ':EN:plain:arc42' not found"
+
+## Issue 1: "Build output missing or incomplete"
 
 ### Symptom
 ```bash
-./gradlew arc42
-# or
-./gradlew :EN:plain:arc42
-
-ERROR: Task ':EN:plain:arc42' not found in project ':EN:plain'.
+ls build/
+# oder
+ls build/src_gen/EN/asciidoc/plain/
+# Erwartete Dateien fehlen oder sind leer
 ```
 
-### Common Causes
-1. **Chicken-and-egg problem**: build/src_gen/ doesn't exist yet
-2. **Deleted build directory**: Subprojects lost
-3. **Failed createTemplatesFromGoldenMaster**: Incomplete structure
+### Häufige Ursachen
+1. **Build-Skript nicht ausgeführt**: `build-arc42.sh` wurde nicht gestartet
+2. **Build-Verzeichnis gelöscht**: Build-Ordner entfernt, aber kein erneuter Build
+3. **Fehlerhafte Submodule**: arc42-template nicht initialisiert oder veraltet
 
 ### Debugging Steps
 ```bash
-# 1. Check if structure exists
+# 1. Build-Skript ausführen
+./build-arc42.sh
+
+# 2. Prüfen, ob alle Sprachen/Varianten generiert wurden
 ls build/src_gen/
+ls build/EN/html/
 
-# 2. Check if subprojects discovered
-./gradlew projects
-
-# 3. Check if specific language/style exists
-ls build/src_gen/EN/asciidoc/plain/
+# 3. Submodule prüfen
+git submodule status
 ```
 
-### Fix
+### Lösung
 ```bash
-# Always run this first:
-./gradlew createTemplatesFromGoldenMaster
-
-# Then run:
-./gradlew arc42
+# Immer zuerst das Build-Skript ausführen:
+./build-arc42.sh
 ```
 
-### Prevention
-- Use `./build-arc42.sh` which handles sequencing automatically
-- Document: Never delete build/ without re-running createTemplatesFromGoldenMaster
-- Add check in documentation/scripts
+### Prävention
+- Nutze immer `./build-arc42.sh`, das alle Schritte automatisch erledigt
+- Lösche das build/-Verzeichnis nur, wenn du danach das Build-Skript erneut ausführst
+- Prüfe regelmäßig, ob das Submodul aktuell ist (`git submodule update`)
 
-**Reference**: [Concepts: Chicken-and-Egg Problem](../arc42/08-concepts.md#concept-2-the-chicken-and-egg-problem-gradle-build-lifecycle)
+**Referenz**: [Concepts: Chicken-and-Egg Problem](../arc42/08-concepts.md#concept-2-the-chicken-and-egg-problem-gradle-build-lifecycle)
 
 ---
 

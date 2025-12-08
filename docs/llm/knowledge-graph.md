@@ -12,7 +12,7 @@ Level 0: Fundamental Concepts (must understand first)
 Level 1: Architectural Concepts (build on fundamentals)
   ├─ Two-Stage Conversion Pipeline
   ├─ Dynamic Subproject Generation
-  └─ Gradle Build Lifecycle (Chicken-and-Egg)
+  └─ Build Orchestration & Chicken-and-Egg Problem
 
 Level 2: Implementation Concepts (build on architecture)
   ├─ Feature Flag Processing (Regex)
@@ -77,7 +77,7 @@ concepts:
 
     code_locations:
       - "buildconfig.groovy:8-14 (feature definitions)"
-      - "build.gradle:88-94 (removal logic)"
+      - "build.groovy: (removal logic)"
       - "arc42-template/{LANG}/asciidoc/src/*.adoc (Golden Master sources)"
 
     related_adrs:

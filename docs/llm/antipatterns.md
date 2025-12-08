@@ -29,9 +29,9 @@ This document catalogs common mistakes when working with arc42-generator, showin
 vim build/src_gen/EN/asciidoc/plain/src/01_introduction.adoc
 # Makes changes, seems to work
 
-# Later, someone runs:
-./gradlew clean createTemplatesFromGoldenMaster
-# Changes are GONE! 💥
+# Später läuft jemand:
+./build-arc42.sh
+# Änderungen sind WEG! 💥
 ```
 
 ### ✅ Correct Approach
@@ -42,8 +42,9 @@ vim build/src_gen/EN/asciidoc/plain/src/01_introduction.adoc
 # Edit the source file in the submodule
 vim arc42-template/EN/asciidoc/src/01_introduction_and_goals.adoc
 
-# Regenerate from Golden Master
-./gradlew createTemplatesFromGoldenMaster
+
+# Aus Golden Master neu generieren
+groovy build.groovy templates
 
 # Verify changes in generated files
 diff arc42-template/EN/asciidoc/src/01_introduction_and_goals.adoc \

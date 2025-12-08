@@ -30,7 +30,7 @@ git checkout -b feature/update-section-05
 vim EN/asciidoc/src/05_building_block_view.adoc
 # Test both variants
 cd ..
-./gradlew createTemplatesFromGoldenMaster
+groovy build.groovy templates
 diff build/src_gen/EN/asciidoc/plain/src/05_building_block_view.adoc \
      build/src_gen/EN/asciidoc/with-help/src/05_building_block_view.adoc
 # Verify feature flags worked correctly
@@ -45,9 +45,10 @@ git push origin feature/update-section-05
 git checkout -b feature/add-rst-format
 # Edit buildconfig.groovy or build.gradle
 # Test build
-./gradlew clean
-./gradlew createTemplatesFromGoldenMaster
-./gradlew :EN:plain:convert2Rst  # Test new format
+# buildconfig.groovy anpassen
+groovy build.groovy clean
+groovy build.groovy templates
+groovy build.groovy convert
 # Verify output
 ls build/EN/rst/plain/
 git add buildconfig.groovy
@@ -67,16 +68,24 @@ git push origin feature/add-rst-format
 - [ ] Check distribution ZIPs contain expected files
 - [ ] Validate no content leaked to wrong variants
 - [ ] Test on fresh clone (verify submodule instructions)
+**Manuelle Test-Checkliste**:
+- [ ] Clean build from scratch: `rm -rf build/ && ./build-arc42.sh`
+- [ ] Mindestens 2 Sprachen testen (z. B. EN, DE)
+- [ ] Beide Template-Varianten testen (plain, with-help)
+- [ ] Prüfen, ob alle gewünschten Formate erzeugt werden
+- [ ] Distribution-ZIPs auf Vollständigkeit prüfen
+- [ ] Sicherstellen, dass keine Inhalte in falsche Varianten gelangen
+- [ ] Test auf frischem Clone (Submodule prüfen)
 
 **Format-Specific Testing**:
 ```bash
 # HTML: Open in browser
-open build/EN/html/plain/arc42-template.html
+xdg-open build/EN/html/plain/arc42-template.html
 
 # DOCX: Extract and check structure
 cd arc42-template/dist
 unzip arc42-template-EN-plain-docx.zip
-open arc42-template-EN.docx
+libreoffice arc42-template-EN.docx
 
 # Markdown: Check syntax
 cd ../../build/EN/markdown/plain
