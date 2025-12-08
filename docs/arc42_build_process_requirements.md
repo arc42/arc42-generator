@@ -350,22 +350,110 @@ High-level idea:
 - The build process must provide a **single entry point** for typical usage, with sensible defaults.
 - Documentation must include:
   - how to run a full build,
-  - how to build a subset (e.g., “only EN PDF withHelp”),
+  - how to build a subset (e.g., "only EN PDF withHelp"),
   - how to add a new language or format,
   - how to run tests and validations.
 
+### Quick Local Testing
+
+For efficient development and debugging, the build system must support **quick local testing** with minimal overhead:
+
+- **Subset builds**: Build only specific combinations of language/format/flavor without running the full pipeline.
+
+  Examples:
+  - `./build.sh --lang EN --format html --flavor plain`
+  - `./build.sh --lang DE --format pdf --flavor withHelp`
+
+- **Fast feedback mode**: Skip non-essential steps (e.g., compression, checksums) for faster iteration during content development.
+
+- **Watch mode** (optional but recommended): Auto-rebuild on source file changes for rapid preview during editing.
+  - Example: `./build.sh --watch --lang EN --format html`
+  - Should detect changes to `.adoc` files and diagrams, then re-run the minimal necessary conversion.
+
+- **Preview command**: Generate a quick, unvalidated preview of a single language/format for immediate visual inspection without full quality checks.
+  - Example: `./build.sh --preview --lang EN --format html`
+
+The quick test mode should complete in **under 30 seconds** for a single language/format combination to enable rapid iteration.
 
 
 ## Testing and Quality Checks
 
-The build system must provide automated checks, at least:
+The build system must provide automated checks at multiple levels to ensure output quality and correctness.
+
+### Validation Mode
+
+The build system must support a **validation-only mode** that checks source files without performing conversions:
+
+```bash
+./build.sh --validate-only
+```
+
+This mode should:
+
+- **Verify file references**: Check that all `include::` directives and image references (`image::`) point to existing files.
+- **Validate AsciiDoc syntax**: Run AsciiDoc linting to catch syntax errors, invalid attributes, and malformed markup.
+- **Check version metadata**: Ensure `version.properties` exists for each language and contains required attributes:
+  - `revnumber`
+  - `revdate`
+  - `revremark`
+- **Validate flavor markers**: Verify that plain/withHelp markers (tags, conditionals) are consistent and can be reliably filtered.
+- **Check diagram files**: Ensure all referenced diagrams exist and are readable (valid PNG/JPG/SVG format).
+- **Language completeness check** (optional): Detect missing translations or outdated content compared to reference languages (EN/DE).
+
+Validation should complete in **under 1 minute** for all languages and produce a clear report of errors and warnings.
+
+**Exit behavior:**
+- Exit code 0 if no errors
+- Exit code 1 if validation errors found
+- Exit code 2 if warnings only (configurable whether warnings should fail the build)
+
+### Automated Build Tests
+
+The build system must provide automated checks:
 
 1. **Smoke tests**:
    - For each supported format, generate an example output for at least one language (e.g., EN).
    - Verify that files are created and non-empty.
+   - Check that file sizes are reasonable (e.g., > 10 KB for typical outputs).
+
 2. **Structural checks**:
    - Verify that expected sections exist (e.g., 01–12 for arc42).
-   - Check that metadata (revnumber, revdate) is present.
+   - Check that metadata (revnumber, revdate) is present in generated outputs.
+   - Ensure table of contents is generated correctly.
+   - Verify that internal cross-references resolve correctly.
+
+3. **Content integrity checks**:
+   - Verify that diagrams are embedded or correctly referenced in output documents.
+   - Check that code blocks, tables, and admonitions render correctly.
+   - Ensure no placeholder text or unresolved attributes remain in output.
+
+### Visual Testing and Quality Inspection
+
+For quality assurance of generated documents, the build system should support **visual inspection workflows**:
+
+#### Manual Visual Inspection
+
+- **Sample outputs**: The build should generate well-known sample outputs (e.g., EN plain HTML, DE withHelp PDF) that can be manually reviewed.
+- **Diff reports**: When rebuilding, optionally generate visual diffs or change reports comparing outputs to previous builds.
+- **Preview mode**: Quick generation of outputs optimized for browser or PDF viewer inspection (see "Quick Local Testing" above).
+
+#### Automated Visual Regression Testing (optional)
+
+For critical formats (HTML, PDF), the build may optionally support automated visual regression testing:
+
+- **Reference snapshots**: Store reference screenshots or rendered versions of key pages/sections.
+- **Comparison**: Compare newly generated outputs against reference snapshots using image diffing tools.
+- **Threshold configuration**: Allow configurable tolerance for acceptable differences (to handle font rendering variations across platforms).
+
+**Recommended tools:**
+- PDF: `pdf-diff`, `diffpdf`, or image-based comparison via `ImageMagick`
+- HTML: Headless browser screenshots (`Playwright`, `Puppeteer`) with image diffing
+
+**Scope:**
+- At minimum, test the first page and one sample section (e.g., Section 1 "Introduction and Goals").
+- Flag significant layout shifts, missing images, or broken formatting.
+
+Visual testing should be **opt-in** and not block standard builds, but should be runnable in CI for release validation.
 
 Where possible, tests should be implemented in an automated way (e.g., scripts or unit tests for the orchestrator).
 
