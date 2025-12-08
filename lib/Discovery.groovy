@@ -24,7 +24,7 @@ class Discovery {
     /**
      * Scan the source generation directory and discover all templates
      *
-     * Structure expected:
+     * Structure expected (new structure from arc42-template):
      * build/src_gen/
      *   <LANG>/
      *     asciidoc/
@@ -33,6 +33,9 @@ class Discovery {
      *         images/
      *     common/
      *     version.properties
+     *
+     * This matches the output structure created by Templates.groovy from the
+     * Golden Master, which generates the traditional nested structure.
      *
      * @return List of maps with template metadata:
      *         [language: 'EN', style: 'plain', sourcePath: '...', hasImages: true, ...]
@@ -54,7 +57,7 @@ class Discovery {
 
         def templates = []
 
-        // Scan for language directories (e.g., EN, DE, FR)
+        // Scan for language directories (e.g., EN, DE, FR, ZH, UKR)
         def languageDirs = srcGenPath.listFiles()
             ?.findAll { it.isDirectory() && it.name ==~ /^[A-Z]{2,}$/ }
             ?.sort { it.name }

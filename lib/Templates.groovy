@@ -22,9 +22,10 @@ class Templates {
 
     /**
      * Auto-discover available languages by scanning arc42-template/ directory
-     * Looks for directories matching pattern: /^[A-Z]{2}$/
+     * Looks for directories matching pattern: /^[A-Z]{2,}$/
+     * (Matches 2 or more uppercase letters, e.g., DE, EN, ZH, UKR)
      *
-     * @return List of language codes (e.g., ['DE', 'EN', 'FR', 'CZ'])
+     * @return List of language codes (e.g., ['CZ', 'DE', 'EN', 'ES', 'FR', 'IT', 'NL', 'PT', 'RU', 'UKR', 'ZH'])
      */
     List<String> discoverLanguages() {
         def sourcePath = new File(projectRoot, config.goldenMaster.sourcePath)
@@ -34,7 +35,7 @@ class Templates {
         }
 
         def languages = sourcePath.listFiles()
-            ?.findAll { it.isDirectory() && it.name ==~ /^[A-Z]{2}$/ }
+            ?.findAll { it.isDirectory() && it.name ==~ /^[A-Z]{2,}$/ }
             *.name
             .sort()
 
@@ -47,13 +48,30 @@ class Templates {
     }
 
     /**
-     * Remove feature flags from template content using regex patterns
-     * Ported from build.gradle:88-94
+     * Adjust include paths in main template
+     * The main template contains includes like:
+     *   include::adoc/config.adoc[]
+     *   include::../common/styles/arc42-help-style.adoc[]
+     *
+     * When copied to build/src_gen/<LANG>/asciidoc/<STYLE>/src/, these become relative to that location.
+     * We need to replace:
+     *   adoc/ → ./  (sections are in the same src/ directory after copy)
+     *   ../common/ → ../../../common/  (go up from src/ → style/ → asciidoc/ → LANG/)
      *
      * @param template The template content
-     * @param featuresToRemove List of features to remove (e.g., ['help', 'example'])
-     * @return Modified template with features removed
+     * @return Modified template with corrected include paths
      */
+    String adjustIncludePaths(String template) {
+        def result = template
+
+        // Fix adoc/ includes to reference current directory (all files in src/)
+        result = result.replaceAll('include::adoc/', 'include::')
+
+        // Fix ../common/ includes to reference the language common directory
+        result = result.replaceAll('include::../common/', 'include::../../../common/')
+
+        return result
+    }
     String removeFeatures(String template, List<String> featuresToRemove) {
         def result = template
 
@@ -72,40 +90,40 @@ class Templates {
     }
 
     /**
-     * Copy images based on template style
-     * - plain: only arc42-logo.png
-     * - with-help: logo + language-specific example images
+     * Copy images from language directory
+     * New structure: arc42-template/<LANG>/images/
      *
      * @param language Language code (e.g., 'EN')
      * @param templateName Template style (e.g., 'plain', 'with-help')
+     * @param languagePath Path to the language directory in Golden Master
      * @param targetPath Target directory path
      */
-    void copyImages(String language, String templateName, String targetPath) {
-        def pathToDEGoldenMaster = config.goldenMaster.sourcePath + '/DE/asciidoc/'
-        def imagesSource = new File(projectRoot, pathToDEGoldenMaster + '/../../images')
+    void copyImages(String language, String templateName, String languagePath, String targetPath) {
+        def imagesSource = new File(projectRoot, languagePath + '/images')
         def imagesTarget = new File(projectRoot, targetPath + '/images')
 
         imagesTarget.mkdirs()
 
+        if (!imagesSource.exists()) {
+            println "  ⚠ Warning: No images directory found at ${imagesSource.absolutePath}"
+            return
+        }
+
+        def imageFiles = imagesSource.listFiles()?.findAll { it.isFile() }
+
         if (templateName == 'plain') {
             // Only copy the logo
-            def logoSource = new File(imagesSource, 'arc42-logo.png')
-            def logoTarget = new File(imagesTarget, 'arc42-logo.png')
+            def logoSource = imageFiles?.find { it.name == 'arc42-logo.png' }
 
-            if (logoSource.exists()) {
+            if (logoSource) {
+                def logoTarget = new File(imagesTarget, 'arc42-logo.png')
                 logoTarget.bytes = logoSource.bytes
                 println "  ✓ Copied arc42-logo.png"
             } else {
-                println "  ⚠ Warning: arc42-logo.png not found at ${logoSource.absolutePath}"
+                println "  ⚠ Warning: arc42-logo.png not found"
             }
         } else {
-            // Copy logo plus example images
-            def imageFiles = imagesSource.listFiles()?.findAll { file ->
-                file.name == 'arc42-logo.png' ||
-                file.name.contains("-${language}.") ||
-                file.name.contains("-EN.")
-            }
-
+            // Copy all images for with-help style
             imageFiles?.each { sourceFile ->
                 def targetFile = new File(imagesTarget, sourceFile.name)
                 targetFile.bytes = sourceFile.bytes
@@ -118,13 +136,19 @@ class Templates {
     /**
      * Main method: Create templates from Golden Master
      *
+     * New Structure (arc42-template):
+     * - <LANG>/arc42-template.adoc (main template file)
+     * - <LANG>/adoc/ (individual sections)
+     * - <LANG>/images/ (images)
+     * - <LANG>/version.properties
+     *
      * Process:
      * 1. Auto-discover languages
      * 2. For each language:
      *    - Copy common files
      *    - Copy version.properties
      *    - For each template style:
-     *      - Process .adoc and .config files
+     *      - Process main template and section files
      *      - Remove unwanted features
      *      - Copy images
      */
@@ -146,7 +170,8 @@ class Templates {
         languages.each { language ->
             println "Language: ${language}"
 
-            def pathToGoldenMaster = config.goldenMaster.sourcePath + '/' + language + '/asciidoc/'
+            def pathToGoldenMasterLang = config.goldenMaster.sourcePath + '/' + language
+            def goldenMasterLangDir = new File(projectRoot, pathToGoldenMasterLang)
 
             // Copy common files
             def commonSource = new File(projectRoot, config.goldenMaster.sourcePath + '/common/.')
@@ -166,7 +191,7 @@ class Templates {
             }
 
             // Copy version.properties
-            def versionSource = new File(projectRoot, config.goldenMaster.sourcePath + language + '/version.properties')
+            def versionSource = new File(goldenMasterLangDir, 'version.properties')
             def versionTarget = new File(projectRoot, config.goldenMaster.targetPath + language + '/version.properties')
 
             if (versionSource.exists()) {
@@ -176,9 +201,6 @@ class Templates {
             }
 
             // Process each template style
-            def sourceSub = new File(projectRoot, pathToGoldenMaster + 'src/.')
-            def sourceMain = new File(projectRoot, pathToGoldenMaster)
-
             templateStyles.each { templateName, featuresWanted ->
                 def featuresToRemove = allFeatures - featuresWanted
                 def pathToTarget = config.goldenMaster.targetPath + '/' + language + '/asciidoc/' + templateName
@@ -187,18 +209,36 @@ class Templates {
 
                 println "  Style: ${templateName} (removing features: ${featuresToRemove ?: 'none'})"
 
-                // Process files from both sourceMain and sourceSub
+                // Process main template file: <LANG>/arc42-template.adoc
+                def mainTemplateSource = new File(goldenMasterLangDir, 'arc42-template.adoc')
                 def processedCount = 0
-                [sourceMain, sourceSub].each { source ->
-                    source.eachFile { sourceFile ->
-                        if (sourceFile.name.endsWith('.adoc') || sourceFile.name.endsWith('.config')) {
+
+                if (mainTemplateSource.exists()) {
+                    def targetFile = new File(targetSrc, mainTemplateSource.name)
+                    def template = mainTemplateSource.getText('utf-8')
+
+                    // Remove unwanted features
+                    template = removeFeatures(template, featuresToRemove)
+
+                    // Fix include paths for new flat structure
+                    template = adjustIncludePaths(template)
+
+                    targetFile.write(template, 'utf-8')
+                    processedCount++
+                }
+
+                // Process section files from <LANG>/adoc/ directory
+                def adocDir = new File(goldenMasterLangDir, 'adoc')
+                if (adocDir.exists() && adocDir.isDirectory()) {
+                    adocDir.eachFile { sourceFile ->
+                        if (sourceFile.name.endsWith('.adoc')) {
                             def targetFile = new File(targetSrc, sourceFile.name)
-                            def template = sourceFile.getText('utf-8')
+                            def content = sourceFile.getText('utf-8')
 
                             // Remove unwanted features
-                            template = removeFeatures(template, featuresToRemove)
+                            content = removeFeatures(content, featuresToRemove)
 
-                            targetFile.write(template, 'utf-8')
+                            targetFile.write(content, 'utf-8')
                             processedCount++
                         }
                     }
@@ -207,7 +247,7 @@ class Templates {
                 println "    ✓ Processed ${processedCount} file(s)"
 
                 // Copy images
-                copyImages(language, templateName, pathToTarget)
+                copyImages(language, templateName, pathToGoldenMasterLang, pathToTarget)
             }
 
             println ""

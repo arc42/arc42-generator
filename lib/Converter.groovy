@@ -89,8 +89,8 @@ class Converter {
         def attributes = createAttributes(template)
         attributes.put('backend', 'html5')
 
-        // baseDir must be parent of src/ because includes are relative to arc42-template.adoc
-        def baseDir = new File(template.sourcePath).canonicalFile
+        // baseDir must be srcDir because includes are relative to arc42-template.adoc
+        def baseDir = new File(template.srcDir).canonicalFile
 
         def options = Options.builder()
             .toFile(outputFile)
@@ -122,8 +122,8 @@ class Converter {
         def attributes = createAttributes(template)
         attributes.put('backend', 'docbook')
 
-        // baseDir must be parent of src/ because includes are relative to arc42-template.adoc
-        def baseDir = new File(template.sourcePath).canonicalFile
+        // baseDir must be srcDir because includes are relative to arc42-template.adoc
+        def baseDir = new File(template.srcDir).canonicalFile
 
         def options = Options.builder()
             .toFile(outputFile)
