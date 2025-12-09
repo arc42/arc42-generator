@@ -1,9 +1,5 @@
 build
-.gradle
 *.iml
-/.nb-gradle/
-gradle-app.setting
-.nb-gradle-properties
 src_gen
 .idea
 
