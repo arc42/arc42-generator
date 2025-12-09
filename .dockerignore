@@ -1,0 +1,46 @@
+# Git history - not needed in container
+.git/
+.github/
+.gitignore
+.gitattributes
+
+# Build artifacts - will be regenerated in container
+build/
+
+# Documentation and development files
+docs/
+*.md
+!README.md
+LICENSE
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Test files
+test*/
+*_test.groovy
+run-all-tests.groovy
+test-*.groovy
+
+# Backup files
+*.backup*
+*.bak
+.vibe/
+
+# Logs
+*.log
+
+# Docker files (no need to copy into image)
+docker-compose.yml
+.dockerignore
+
+# CI/CD files
+.github/
