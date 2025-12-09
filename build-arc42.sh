@@ -18,9 +18,27 @@ echo ""
 # Check if Pandoc is installed
 if ! command -v pandoc &> /dev/null; then
     echo "==> Installing Pandoc 3.7.0.2..."
-    wget https://github.com/jgm/pandoc/releases/download/3.7.0.2/pandoc-3.7.0.2-1-amd64.deb
-    sudo dpkg -i pandoc-3.7.0.2-1-amd64.deb
-    rm pandoc-3.7.0.2-1-amd64.deb
+
+    # Detect architecture
+    ARCH=$(dpkg --print-architecture 2>/dev/null || uname -m)
+    case "$ARCH" in
+        amd64|x86_64)
+            PANDOC_DEB="pandoc-3.7.0.2-1-amd64.deb"
+            ;;
+        arm64|aarch64)
+            PANDOC_DEB="pandoc-3.7.0.2-1-arm64.deb"
+            ;;
+        *)
+            echo "Error: Unsupported architecture: $ARCH"
+            echo "Please install Pandoc manually from https://pandoc.org/installing.html"
+            exit 1
+            ;;
+    esac
+
+    echo "Detected architecture: $ARCH, downloading $PANDOC_DEB"
+    wget https://github.com/jgm/pandoc/releases/download/3.7.0.2/$PANDOC_DEB
+    dpkg -i $PANDOC_DEB
+    rm $PANDOC_DEB
     echo "✓ Pandoc installed"
 else
     echo "✓ Pandoc already installed: $(pandoc --version | head -1)"
@@ -29,8 +47,17 @@ echo ""
 
 # Update submodules
 echo "==> Updating arc42-template submodule..."
+
+# Handle Docker context where submodule might be in inconsistent state
+# Remove entire submodule directory to avoid conflicts with existing files
+if [ -d "arc42-template" ]; then
+    echo "Cleaning up existing submodule directory..."
+    rm -rf arc42-template
+fi
+
+# Initialize and update submodule
 git submodule init
-git submodule update
+git submodule update --force
 cd arc42-template
 git checkout master
 git pull
