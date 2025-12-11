@@ -48,6 +48,10 @@ echo ""
 # Update submodules
 echo "==> Updating arc42-template submodule..."
 
+# Fix Git ownership issue when running in Docker with mounted volumes (Codespaces/CI)
+git config --global --add safe.directory /workspace 2>/dev/null || true
+git config --global --add safe.directory /workspace/arc42-template 2>/dev/null || true
+
 # Handle Docker context where submodule might be in inconsistent state
 # Remove entire submodule directory to avoid conflicts with existing files
 if [ -d "arc42-template" ]; then

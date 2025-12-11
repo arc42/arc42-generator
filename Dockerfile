@@ -57,6 +57,9 @@ RUN apk add --no-cache \
     pandoc \
     cmark
 
+# Fix Git ownership for mounted volumes (Codespaces/CI environments)
+RUN git config --global --add safe.directory '*'
+
 # Copy Groovy installation from builder
 COPY --from=builder /opt/groovy-5.0.3 /opt/groovy-5.0.3
 RUN ln -s /opt/groovy-5.0.3 /opt/groovy
