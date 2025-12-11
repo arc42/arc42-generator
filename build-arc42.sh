@@ -69,7 +69,38 @@ echo ""
 echo "==> Building arc42 templates with Groovy build system..."
 groovy build.groovy
 
+# Validate generated markdown files with cmark
 echo ""
+echo "==> Validating generated markdown files with cmark..."
+MARKDOWN_DIR="build/EN/markdown"
+VALIDATION_FAILED=0
+
+if [ -d "$MARKDOWN_DIR" ]; then
+    echo "Checking markdown files in: $MARKDOWN_DIR"
+    for md_file in "$MARKDOWN_DIR"/*.md; do
+        if [ -f "$md_file" ]; then
+            echo -n "  Validating $(basename "$md_file")... "
+            if cmark "$md_file" > /dev/null 2>&1; then
+                echo "✓"
+            else
+                echo "✗ FAILED"
+                VALIDATION_FAILED=1
+            fi
+        fi
+    done
+
+    if [ $VALIDATION_FAILED -eq 0 ]; then
+        echo "✓ All markdown files are valid CommonMark"
+    else
+        echo "⚠ Warning: Some markdown files failed validation"
+        echo "  (This is non-fatal, build continues)"
+    fi
+else
+    echo "⚠ Warning: Markdown directory not found: $MARKDOWN_DIR"
+    echo "  (Skipping validation)"
+fi
+echo ""
+
 echo "╔═══════════════════════════════════════════════════════════════════════════╗"
 echo "║                          BUILD COMPLETE                                   ║"
 echo "╚═══════════════════════════════════════════════════════════════════════════╝"

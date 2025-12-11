@@ -9,13 +9,15 @@ FROM alpine:3.20 AS builder
 # - git: For submodule management
 # - wget & unzip: For downloading Groovy
 # - pandoc: Document converter (already in Alpine repos!)
+# - cmark: CommonMark markdown validator
 RUN apk add --no-cache \
     openjdk21-jre-headless \
     bash \
     git \
     wget \
     unzip \
-    pandoc
+    pandoc \
+    cmark
 
 # Install Groovy
 RUN wget -q https://groovy.jfrog.io/artifactory/dist-release-local/groovy-zips/apache-groovy-binary-5.0.3.zip && \
@@ -52,7 +54,8 @@ RUN apk add --no-cache \
     openjdk21-jre-headless \
     bash \
     git \
-    pandoc
+    pandoc \
+    cmark
 
 # Copy Groovy installation from builder
 COPY --from=builder /opt/groovy-5.0.3 /opt/groovy-5.0.3
