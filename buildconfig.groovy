@@ -29,7 +29,7 @@ formats = [
     'mkdocsMP': [imageFolder: true],
     'textile': [imageFolder: true],
     'textile2': [imageFolder: true],
-    'docx': [imageFolder: false],
+    'docx': [imageFolder: true],
     'docbook': [imageFolder: true],
     'latex': [imageFolder: true],
 ]

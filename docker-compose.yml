@@ -1,0 +1,8 @@
+services:
+  arc42-builder:
+    build: .
+    container_name: arc42-generator-build
+    volumes:
+      - .:/workspace
+    working_dir: /workspace
+    command: ./build-arc42.sh

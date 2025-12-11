@@ -1,0 +1,31 @@
+# Ensure Unix line endings for shell scripts across all platforms (Windows, macOS, Linux)
+*.sh text eol=lf
+
+# Docker files should also have Unix line endings
+Dockerfile text eol=lf
+docker-compose.yml text eol=lf
+.dockerignore text eol=lf
+
+# Groovy scripts should have Unix line endings
+*.groovy text eol=lf
+
+# General text files
+*.md text
+*.txt text
+*.json text
+*.xml text
+*.properties text
+
+# AsciiDoc files
+*.adoc text
+*.asciidoc text
+
+# Binary files
+*.zip binary
+*.jar binary
+*.deb binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.pdf binary
