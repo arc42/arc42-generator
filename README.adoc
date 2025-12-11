@@ -1,89 +1,133 @@
-= image:./small-arc42-logo.png[arc42] Generator for Template Formats
+= image:./small-arc42-logo.png[arc42] Generator for arc42 Template Formats
 
-If you want to use an arc42 template for your system, you **don't need to use this repo** -
-just use one of the templates you find on http://arc42.org/download.
+If you want to use an arc42 template for your system, you **don't need to use this repo** - just use one of the templates you find on https://arc42.org/download.
 
 == General Overview
 
-The content (structure + embedded-help) of the arc42 template are maintained
-in the http://github.com/arc42/arc42-template repository. We call that one
-the **Golden-Master**
+The content (structure + embedded-help) of the arc42 template are maintained in the https://github.com/arc42/arc42-template repository. 
 
 
-== How to use this Project
+>See section [#generator-requirements] for a brief explanation of terminology and requirements.
+
+== How to Build
+
+
+This repository contains a Groovy-based build system that generates arc42 templates in multiple formats and languages from the Golden Master source.
+
+**IMPORTANT: Docker is the only supported build approach.** All dependencies (Java, Groovy, Pandoc, cmark) are pre-configured in the Docker container.
+
+>In theory it will be possible to run the build locally without Docker, but this is not supported and may lead to unexpected issues.
+
+
+=== Prerequisites
+
+* https://www.docker.com/[Docker] and Docker Compose installed
+* Git (to clone the repository with submodules)
+
+=== Quick Start
+
+1. Clone this repository including submodules:
++
+----
+git clone --recurse-submodules git@github.com:arc42/arc42-generator.git
+cd arc42-generator
+----
+
+2. Run the build using Docker Compose:
++
+----
+docker compose up
+----
++
+The build will:
+
+* Update the arc42-template submodule (Golden Master)
+* Generate templates in all supported languages and flavors
+* Convert to 15+ output formats (HTML, Markdown, DOCX, PDF, etc.)
+* Validate CommonMark markdown and image references
+* Create distribution ZIP files in `arc42-template/dist/`
+
+Results are written to the local `build/` directory.
+
+
+=== Building in GitHub Codespaces
+
+Docker is the recommended approach even in GitHub Codespaces:
+
+----
+docker compose up
+----
+
+The container handles all Git ownership issues automatically, so you don't need to install any local dependencies.
+
+=== Advanced Build Options
+
+To rebuild the Docker image from scratch:
+
+----
+docker compose build --no-cache
+----
+
+To run individual build phases inside the container:
+
+----
+# Start an interactive shell in the container
+docker compose run --rm arc42-builder /bin/bash
+
+# Then run individual phases
+groovy build.groovy templates      # Generate templates only
+groovy build.groovy convert        # Convert to output formats
+groovy build.groovy distribution   # Create distribution ZIPs
+----
+
+=== Build Validation
+
+The build includes automatic validation:
+
+* **CommonMark validation**: Validates generated Markdown files against GitHub-flavored Markdown spec using `cmark`
+* **Image validation**: Checks that all image references exist in with-help flavors (markdown, asciidoc, textile, rst, html)
+* **Submodule integrity**: Ensures arc42-template submodule is up-to-date
+
+All validations are non-fatal - the build continues even if warnings are reported.
 
 
 
-This repository enthält ein Groovy-basiertes Build-System, das mit Standalone-Groovy-Skripten und dem Shell-Skript `build-arc42.sh` arbeitet. Gradle wird nicht mehr benötigt.
+=== Docker Image Details
 
-**Empfohlener Weg:**
+The Docker image is optimized for size and build speed:
 
-1. Klone dieses Repository inkl. Submodule:
+* **Multi-stage build**: Separates build-time and runtime dependencies
+* **Cached dependencies**: Groovy Grape cache pre-populated during image build
+* **Minimal runtime**: Alpine Linux 3.20 with only essential tools
+* **Final image size**: ~564MB
 
-    git clone --recurse-submodules git@github.com:arc42/arc42-generator.git
+The container includes:
 
-2. Starte den Build-Prozess (installiert automatisch Pandoc, aktualisiert Submodule, baut alles):
-
-    ./build-arc42.sh
-
-    Die Ergebnisse findest du im `/build`-Verzeichnis.
-
-
-== Build im Docker-Container
-
-Zum Bauen ohne lokale Installation von Java, Groovy oder Pandoc:
-
-    docker-compose up
-
-Das aktuelle Verzeichnis wird als Volume eingebunden. Die Ergebnisse landen im lokalen `build/`-Ordner.
-
-**Oder manuell:**
-
-1. Submodule ggf. initialisieren:
-    cd arc42-generator
-    git submodule update --init --recursive
-
-2. Golden Master aktualisieren (optional):
-    cd arc42-template
-    git checkout master
-    git pull
-    cd ..
-
-3. Templates generieren:
-    groovy build.groovy templates
-
-4. Formate konvertieren:
-    groovy build.groovy convert
-
-5. Distribution erzeugen:
-    groovy build.groovy distribution
-
-**Shortcut:**
-    groovy build.groovy
-
-**Hinweis:** Das Skript `build-arc42.sh` erledigt alle Schritte automatisch und installiert Pandoc (Version 3.7.0.2) falls nötig.
-
-Die Templates werden in verschiedenen Sprachen unter `build/src_gen` im AsciiDoc-Format generiert. Das System erkennt verfügbare Sprachen automatisch. Nach erfolgreichem Build können die ZIPs im Template-Repo committet werden.
+* Java Runtime (OpenJDK 21)
+* Groovy 5.0.3
+* Pandoc 3.7.0.2 (document converter)
+* cmark (CommonMark validator)
+* AsciidoctorJ (AsciiDoc processor)
 
 
-
-=== Systemanforderungen
-
-* http://groovy-lang.org[Groovy] Version 4.0 oder höher (getestet mit 5.0.2)
-    - Installation z. B. via https://sdkman.io[SDKMAN]: `sdk install groovy`
-* Java Runtime (mindestens Version 11, getestet mit OpenJDK 21)
-* http://pandoc.org[Pandoc] Version 3.0 oder höher (getestet mit 3.7.0.2)
-    - Das Skript `build-arc42.sh` installiert Pandoc automatisch, falls nicht vorhanden
-
-Falls Tools fehlen, bricht der Build mit einer Fehlermeldung ab.
+**No local installation of Java, Groovy, or Pandoc is required or supported.**
 
 
 == General Requirements
-We collected the +arc42+ link:docs/arc42-requirements.adoc[requirements
-in a separate document].
+
+=== Requirements Concerning the Generator
+
+We need to build the template for several output formats and natural languages from a single source (the Golden Master in arc42-template).
+
+* Technical formats: docx, Markdown (with numerous variants), AsciiDoc, reStructuredText, Textile, HTML
+* Variantes (aka _flavours_): withHelp (embedded help texts), plain (no help texts)
+* Natural languages: English, German, Spanish, French, Italian, Portuguese, Chinese and others.
+
+
+=== Requirements Concerning arc42
+We collected the +arc42+ link:docs/arc42-requirements.adoc[requirements in a separate document].
 
 
 
 == Template Downloads
-For template downloads please see the https://github.com/arc42/arc42-template[arc42-template]
-repository or the official download page on http://arc42.org/download.
+For template downloads please see the https://github.com/arc42/arc42-template[arc42-template] repository or the official download page on http://arc42.org/download.
