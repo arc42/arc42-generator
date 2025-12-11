@@ -99,6 +99,80 @@ else
     echo "⚠ Warning: Markdown directory not found: $MARKDOWN_DIR"
     echo "  (Skipping validation)"
 fi
+# Validate images exist and are referenced correctly
+# Images are only required for with-help flavors in specific formats
+echo ""
+echo "==> Validating images for with-help flavors..."
+IMAGE_VALIDATION_FAILED=0
+
+# Only check formats that need images: md, adoc, textile, rst, html
+# Only check with-help flavor (not plain)
+FORMATS_WITH_IMAGES="markdown asciidoc textile rst html"
+
+# Option 1: Check if image directories exist and contain files
+echo "Checking image directories in with-help flavors..."
+for lang_dir in build/*/; do
+    if [ -d "$lang_dir" ]; then
+        lang=$(basename "$lang_dir")
+
+        # Check for images directory in each format that needs it
+        for format in $FORMATS_WITH_IMAGES; do
+            # Check the with-help subdirectory (images only needed in with-help, not plain)
+            with_help_dir="${lang_dir}${format}/with-help"
+            if [ -d "$with_help_dir" ]; then
+                images_dir="${with_help_dir}/images"
+
+                if [ ! -d "$images_dir" ]; then
+                    echo "  ⚠ Missing images directory: $lang/$format/with-help/images/"
+                    IMAGE_VALIDATION_FAILED=1
+                elif [ -z "$(ls -A "$images_dir" 2>/dev/null)" ]; then
+                    echo "  ⚠ Empty images directory: $lang/$format/with-help/images/"
+                    IMAGE_VALIDATION_FAILED=1
+                fi
+            fi
+        done
+    fi
+done
+
+# Option 2: Check markdown files for image references and validate they exist
+echo "Checking image references in markdown with-help files..."
+for lang_dir in build/*/markdown/with-help/; do
+    if [ -d "$lang_dir" ]; then
+        lang=$(basename "$(dirname "$(dirname "$lang_dir")")")
+        images_dir="${lang_dir}images"
+
+        # Find all image references in markdown files
+        for md_file in "$lang_dir"*.md; do
+            if [ -f "$md_file" ]; then
+                # Extract image paths from markdown syntax ![alt](path)
+                grep -oP '!\[.*?\]\(\K[^)]+' "$md_file" 2>/dev/null | while IFS= read -r img_ref; do
+                    # Handle relative paths (remove leading ./)
+                    img_ref="${img_ref#./}"
+
+                    # Construct full path relative to markdown directory
+                    if [[ "$img_ref" == images/* ]]; then
+                        full_path="$lang_dir$img_ref"
+                    else
+                        full_path="$lang_dir$img_ref"
+                    fi
+
+                    # Check if file exists
+                    if [ ! -f "$full_path" ]; then
+                        echo "  ✗ Missing image in $lang: $img_ref (referenced in $(basename "$md_file"))"
+                        IMAGE_VALIDATION_FAILED=1
+                    fi
+                done
+            fi
+        done
+    fi
+done
+
+if [ $IMAGE_VALIDATION_FAILED -eq 0 ]; then
+    echo "✓ All image directories present and references valid in with-help flavors"
+else
+    echo "⚠ Warning: Some image issues detected in with-help flavors"
+    echo "  (This is non-fatal, build continues)"
+fi
 echo ""
 
 echo "╔═══════════════════════════════════════════════════════════════════════════╗"
