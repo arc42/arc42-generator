@@ -1,6 +1,7 @@
 services:
   arc42-builder:
     build: .
+    image: arc42-generator:9.1.0
     container_name: arc42-generator-build
     volumes:
       - .:/workspace
