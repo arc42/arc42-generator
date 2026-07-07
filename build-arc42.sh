@@ -60,12 +60,22 @@ if [ -d "arc42-template" ]; then
 fi
 
 # Initialize and update submodule
-git submodule init
-git submodule update --force
-cd arc42-template
-git checkout master
-git pull
-cd ..
+# Retry with stale-lock cleanup: Docker Desktop's macOS bind-mount layer can
+# race on index.lock creation, especially with another git client (e.g. a
+# GUI tool) watching the same repo concurrently.
+for attempt in 1 2 3; do
+    rm -f .git/index.lock .git/modules/arc42-template/index.lock .git/modules/req42-framework/index.lock
+    if git submodule init && git submodule update --force \
+        && (cd arc42-template && git checkout master && git pull); then
+        break
+    fi
+    if [ "$attempt" -eq 3 ]; then
+        echo "✗ Submodule update failed after $attempt attempts" >&2
+        exit 1
+    fi
+    echo "Submodule update failed (attempt $attempt/3), retrying..."
+    sleep 2
+done
 echo "✓ Submodule updated"
 echo ""
 
