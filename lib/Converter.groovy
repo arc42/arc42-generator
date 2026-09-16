@@ -350,8 +350,9 @@ class Converter {
             if (proc.exitValue() != 0) println "  ⚠ Pandoc failed for ${xmlFile.name}: ${proc.err.text}"
         }
 
+        // drop the generated boilerplate pages, but keep every real chapter
         if (format == 'mkdocsMP') {
-            outputFileDir.listFiles()?.findAll { it.name == 'config.md' || it.name ==~ /about-.+\.md/ }?.each { it.delete() }
+            ['config.md', "about-${config.project.featurePrefix}.md".toString()].each { new File(outputFileDir, it).delete() }
         }
 
         return outputFileDir.absolutePath

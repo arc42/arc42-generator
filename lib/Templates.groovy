@@ -219,19 +219,23 @@ class Templates {
                 def mainTemplateSource = new File(goldenMasterLangDir, "${config.project.name}.adoc")
                 def processedCount = 0
 
-                if (mainTemplateSource.exists()) {
-                    def targetFile = new File(targetSrc, mainTemplateSource.name)
-                    def template = mainTemplateSource.getText('utf-8')
-
-                    // Remove unwanted features
-                    template = removeFeatures(template, featuresToRemove)
-
-                    // Fix include paths for new flat structure
-                    template = adjustIncludePaths(template)
-
-                    targetFile.write(template, 'utf-8')
-                    processedCount++
+                if (!mainTemplateSource.exists()) {
+                    throw new IllegalStateException(
+                        "Main document not found: ${mainTemplateSource.path}\n" +
+                        "project.name must match <LANG>/<name>.adoc in the golden master")
                 }
+
+                def mainTargetFile = new File(targetSrc, mainTemplateSource.name)
+                def template = mainTemplateSource.getText('utf-8')
+
+                // Remove unwanted features
+                template = removeFeatures(template, featuresToRemove)
+
+                // Fix include paths for new flat structure
+                template = adjustIncludePaths(template)
+
+                mainTargetFile.write(template, 'utf-8')
+                processedCount++
 
                 // Process section files from <LANG>/adoc/ directory
                 def adocDir = new File(goldenMasterLangDir, 'adoc')

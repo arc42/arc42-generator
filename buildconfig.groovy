@@ -5,7 +5,8 @@ project {
     // base name of the main document (<LANG>/<name>.adoc) and of all generated files and ZIPs
     name = 'arc42-template'
 
-    // prefix of the feature markers in the golden master, e.g. [role="arc42help"]
+    // prefix of the feature markers in the golden master, e.g. [role="arc42help"],
+    // and of the about page (about-arc42.adoc)
     featurePrefix = 'arc42'
 
     // the only image copied into the plain style

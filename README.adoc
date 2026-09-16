@@ -85,7 +85,7 @@ groovy build.groovy distribution   # Create distribution ZIPs
 The generator is not tied to arc42. Everything project-specific lives in the config file:
 
 * `project.name` - base name of the main document (`<LANG>/<name>.adoc`) and of all generated files and ZIPs
-* `project.featurePrefix` - prefix of the feature markers, e.g. `[role="arc42help"]` and `ifdef::arc42help[]`
+* `project.featurePrefix` - prefix of the feature markers, e.g. `[role="arc42help"]` and `ifdef::arc42help[]`, and of the about page (`about-arc42.adoc`)
 * `project.logo` - the only image copied into the plain style
 * `goldenMaster.sourcePath` and `distribution.targetPath` - location of the sources and of the ZIPs
 

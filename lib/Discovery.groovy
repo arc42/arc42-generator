@@ -109,6 +109,7 @@ class Discovery {
                 def mainFile = adocFiles.find { it.name == mainFileName }
                 if (!mainFile) {
                     // Fallback: use first .adoc file
+                    println "⚠ Warning: ${mainFileName} not found in ${language}/${style}/src/, using ${adocFiles[0].name}"
                     mainFile = adocFiles[0]
                 }
 
