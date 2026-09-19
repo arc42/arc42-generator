@@ -6,7 +6,7 @@
  * This script replaces the Gradle build system with a standalone Groovy solution.
  *
  * Pipeline:
- * 1. Load configuration from buildconfig.groovy
+ * 1. Load configuration from buildconfig.groovy (or the file given by --config)
  * 2. Create templates from Golden Master (Templates.groovy)
  * 3. Discover generated templates (Discovery.groovy)
  * 4. Convert templates to all formats (Converter.groovy)
@@ -19,6 +19,7 @@
  *   groovy build.groovy distribution            # Only create distributions
  *   groovy build.groovy convert --format=html   # Convert to specific format only
  *   groovy build.groovy --parallel=false        # Disable parallel execution
+ *   groovy build.groovy --config=path/to/config.groovy   # Build another template (e.g. req42)
  */
 
 // ============================================================================
@@ -26,7 +27,6 @@
 // ============================================================================
 
 def startTime = System.currentTimeMillis()
-def projectRoot = new File('.')
 
 // Parse command-line arguments
 def cliArgs = []
@@ -41,6 +41,7 @@ try {
 def targetPhase = 'all'
 def useParallel = true
 def targetFormat = null
+def configPath = 'buildconfig.groovy'
 
 if (cliArgs) {
     targetPhase = cliArgs.find { !it.startsWith('--') } ?: 'all'
@@ -48,6 +49,10 @@ if (cliArgs) {
     def formatArg = cliArgs.find { it.startsWith('--format=') }
     if (formatArg) {
         targetFormat = formatArg.split('=')[1]
+    }
+    def configArg = cliArgs.find { it.startsWith('--config=') }
+    if (configArg) {
+        configPath = configArg.substring('--config='.length())
     }
 }
 
@@ -72,16 +77,25 @@ println ""
 
 println "=== Loading Configuration ==="
 def config
+def configFile = new File(configPath).absoluteFile
+// All paths in the config are relative to the directory of the config file
+def projectRoot = configFile.parentFile
 try {
-    config = new ConfigSlurper().parse(new File('buildconfig.groovy').toURI().toURL())
-    println "✓ Configuration loaded from buildconfig.groovy"
+    config = new ConfigSlurper().parse(configFile.toURI().toURL())
+    println "✓ Configuration loaded from ${configFile}"
+
+    def missing = ['name', 'featurePrefix', 'logo'].findAll { !config.project[it] }
+    if (missing) {
+        throw new IllegalStateException("missing settings: ${missing.collect { 'project.' + it }.join(', ')}")
+    }
+    println "  Project: ${config.project.name} (root: ${projectRoot})"
 
     def formats = config.formats.keySet() as List
     println "  Templates: ${config.goldenMaster.templateStyles.keySet().size()} styles"
     println "  Formats: ${formats.size()} (${formats.take(5).join(', ')}${formats.size() > 5 ? '...' : ''})"
     println ""
 } catch (Exception e) {
-    println "✗ Failed to load buildconfig.groovy: ${e.message}"
+    println "✗ Failed to load ${configPath}: ${e.message}"
     System.exit(1)
 }
 

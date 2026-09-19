@@ -79,8 +79,8 @@ class Packager {
         // Normalize style name for filename (remove hyphens)
         def styleShort = style.replaceAll("[^a-zA-Z]", "")
 
-        // Target: arc42-template/dist/arc42-template-{LANG}-{STYLE}-{FORMAT}.zip
-        def zipFileName = "arc42-template-${language}-${styleShort}-${format}.zip"
+        // Target: <distribution.targetPath>/<project name>-{LANG}-{STYLE}-{FORMAT}.zip
+        def zipFileName = "${config.project.name}-${language}-${styleShort}-${format}.zip"
         def distDir = new File(projectRoot, config.distribution.targetPath)
         distDir.mkdirs()
         def zipFile = new File(distDir, zipFileName)

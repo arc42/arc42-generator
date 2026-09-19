@@ -33,6 +33,11 @@ class Converter {
         this.asciidoctor = Asciidoctor.Factory.create()
     }
 
+    /** Base name of the main document and of all generated files, e.g. 'arc42-template' */
+    String getProjectName() {
+        return config.project.name
+    }
+
     /**
      * Convert a single template to a specific format
      *
@@ -86,12 +91,12 @@ class Converter {
         def mainFile = new File(template.mainFile).canonicalFile
         def outputFileDir = new File(projectRoot, outputDir).canonicalFile
         outputFileDir.mkdirs()
-        def outputFile = new File(outputFileDir, "arc42-template.html")
+        def outputFile = new File(outputFileDir, projectName + '.html')
 
         def attributes = createAttributes(template)
         attributes.put('backend', 'html5')
 
-        // baseDir must be srcDir because includes are relative to arc42-template.adoc
+        // baseDir must be srcDir because includes are relative to the main document
         def baseDir = new File(template.srcDir).canonicalFile
 
         def options = Options.builder()
@@ -119,12 +124,12 @@ class Converter {
         def outputSubDir = multiPage ? "${outputDir}MP" : outputDir
         def outputFileDir = new File(projectRoot, outputSubDir).canonicalFile
         outputFileDir.mkdirs()
-        def outputFile = new File(outputFileDir, "arc42-template.xml")
+        def outputFile = new File(outputFileDir, projectName + '.xml')
 
         def attributes = createAttributes(template)
         attributes.put('backend', 'docbook')
 
-        // baseDir must be srcDir because includes are relative to arc42-template.adoc
+        // baseDir must be srcDir because includes are relative to the main document
         def baseDir = new File(template.srcDir).canonicalFile
 
         def options = Options.builder()
@@ -171,13 +176,13 @@ class Converter {
 
         // Determine output file extension and Pandoc target format
         def formatConfig = getPandocConfig(format)
-        def outputFileName = "arc42-template-${language}.${formatConfig.extension}"
+        def outputFileName = "${projectName}-${language}.${formatConfig.extension}"
         def outputFileDir = new File(projectRoot, outputDir).canonicalFile
         outputFileDir.mkdirs()
         def outputFile = new File(outputFileDir, outputFileName)
 
         // Build Pandoc command - use relative path to DocBook file since we'll run from docbookDir
-        def docbookFileName = "arc42-template.xml"
+        def docbookFileName = projectName + '.xml'
         def pandocArgs = [
             'pandoc',
             '-r', 'docbook',
@@ -250,7 +255,7 @@ class Converter {
 
         // Copy all files except main template to src/
         srcDir.eachFile { file ->
-            if (file.name != 'arc42-template.adoc') {
+            if (file.name != projectName + '.adoc') {
                 def targetFile = new File(targetSrcDir, file.name)
                 targetFile.write(file.getText('utf-8'), 'utf-8')
             }
@@ -264,7 +269,7 @@ class Converter {
         // - Files are in src/ subdirectory, so references need src/ prefix
         mainContent = mainContent.replaceAll('include::', 'include::src/')
         
-        def targetMainFile = new File(projectRoot, "${outputDir}/arc42-template.adoc")
+        def targetMainFile = new File(projectRoot, "${outputDir}/${projectName}.adoc")
         targetMainFile.write(mainContent, 'utf-8')
 
         return targetMainFile.absolutePath
@@ -306,7 +311,7 @@ class Converter {
         def attrs = createAttributes(template)
         def baseDir = new File(template.srcDir).canonicalFile
         new File(template.srcDir).eachFile { f ->
-            if (!f.name.endsWith('.adoc') || f.name in ['arc42-template.adoc', 'config.adoc']) return
+            if (!f.name.endsWith('.adoc') || f.name in [projectName + '.adoc', 'config.adoc']) return
             def opts = Options.builder().toFile(new File(outDir, f.name.replace('.adoc', '.xml')))
                 .backend('docbook').safe(SafeMode.UNSAFE).baseDir(baseDir).mkDirs(true)
                 .attributes(attrs).build()
@@ -345,7 +350,10 @@ class Converter {
             if (proc.exitValue() != 0) println "  ⚠ Pandoc failed for ${xmlFile.name}: ${proc.err.text}"
         }
 
-        if (format == 'mkdocsMP') ['config.md', 'about-arc42.md'].each { new File(outputFileDir, it).delete() }
+        // drop the generated boilerplate pages, but keep every real chapter
+        if (format == 'mkdocsMP') {
+            ['config.md', "about-${config.project.featurePrefix}.md".toString()].each { new File(outputFileDir, it).delete() }
+        }
 
         return outputFileDir.absolutePath
     }

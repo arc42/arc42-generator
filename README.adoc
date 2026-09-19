@@ -80,6 +80,25 @@ groovy build.groovy convert        # Convert to output formats
 groovy build.groovy distribution   # Create distribution ZIPs
 ----
 
+=== Building Other Templates (e.g. req42)
+
+The generator is not tied to arc42. Everything project-specific lives in the config file:
+
+* `project.name` - base name of the main document (`<LANG>/<name>.adoc`) and of all generated files and ZIPs
+* `project.featurePrefix` - prefix of the feature markers, e.g. `[role="arc42help"]` and `ifdef::arc42help[]`, and of the about page (`about-arc42.adoc`)
+* `project.logo` - the only image copied into the plain style
+* `goldenMaster.sourcePath` and `distribution.targetPath` - location of the sources and of the ZIPs
+
+`buildconfig.groovy` holds the arc42 values. Another template keeps a complete copy of this file (all sections) in its own repository and follows the layout of `arc42-template`: `<LANG>/<name>.adoc`, `<LANG>/adoc/`, `<LANG>/images/` and `<LANG>/version.properties`.
+Paths in a config file are relative to the directory of that file, including the `build/` output.
+
+Mount the template repository into the container and pass its config:
+
+----
+docker compose run --rm -v /path/to/req42-framework:/project arc42-builder \
+  groovy build.groovy --config=/project/buildconfig.groovy
+----
+
 === Build Validation
 
 The build includes automatic validation:

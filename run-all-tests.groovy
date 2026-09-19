@@ -33,6 +33,11 @@ def tests = [
         name: "Format Conversion",
         script: "test-converter.groovy",
         description: "Tests AsciidoctorJ and Pandoc integration"
+    ],
+    [
+        name: "Custom Project Config",
+        script: "test-config.groovy",
+        description: "Tests building a project other than arc42 from its own config file"
     ]
 ]
 

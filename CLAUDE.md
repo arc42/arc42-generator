@@ -45,6 +45,7 @@ groovy build.groovy --format=html  # Build only HTML format
 - **Phase selection**: `templates`, `convert`, `distribution`, or `all` (default)
 - **Format filter**: `--format=html` (only convert to specified format)
 - **Parallel control**: `--parallel=false` (disable parallel execution)
+- **Config file**: `--config=path/to/config.groovy` (default `buildconfig.groovy`; paths inside are relative to that file)
 
 ## Architecture
 
@@ -106,7 +107,7 @@ The system automatically discovers all language directories in `arc42-template/`
 - **Multi-page formats**: markdownMP, mkdocsMP, etc. split the template into separate files
 
 ### Feature Flag System
-The Golden Master uses AsciiDoc role attributes to mark content:
+The Golden Master uses AsciiDoc role attributes to mark content (prefix set by `project.featurePrefix` in the config):
 - `[role="arc42help"]` - Help text (explanations, tips)
 - `[role="arc42example"]` - Example content (currently unused)
 - `lib/Templates.groovy` removes unwanted features using regex to create template variants

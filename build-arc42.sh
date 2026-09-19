@@ -64,7 +64,7 @@ fi
 # race on index.lock creation, especially with another git client (e.g. a
 # GUI tool) watching the same repo concurrently.
 for attempt in 1 2 3; do
-    rm -f .git/index.lock .git/modules/arc42-template/index.lock .git/modules/req42-framework/index.lock
+    rm -f .git/index.lock .git/modules/arc42-template/index.lock
     if git submodule init && git submodule update --force \
         && (cd arc42-template && git checkout master && git pull); then
         break
