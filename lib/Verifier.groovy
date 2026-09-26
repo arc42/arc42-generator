@@ -126,4 +126,65 @@ class Verifier {
             [name: format, cases: cases]
         }
     }
+
+    // ---- source suite ----------------------------------------------------------
+
+    private static final java.util.regex.Pattern INCLUDE = ~/^include::([^\[]+)\[/
+    private static final java.util.regex.Pattern IMAGE = ~/image::?([^\[\s]+)\[/
+
+    Map verifySourceCase(String lang) {
+        long start = System.currentTimeMillis()
+        def findings = []
+        def langDir = new File(goldenMasterDir, lang)
+        def props = versionProps(lang)
+
+        if (!props.revnumber || !props.revdate) {
+            findings << checks.finding('src.versionProperties', "${lang}/version.properties missing revnumber or revdate", [[location: "${lang}/version.properties".toString(), text: props.toString()]])
+        }
+
+        def mainFile = new File(langDir, "${projectName}.adoc")
+        if (!mainFile.exists()) {
+            findings << checks.finding('src.mainFile', "${lang}/${projectName}.adoc not found", [[location: "${lang}/${projectName}.adoc".toString(), text: 'missing']])
+        }
+
+        def adocDir = new File(langDir, 'adoc')
+        def chapterFiles = adocDir.listFiles()?.findAll { it.name ==~ /^\d\d_.*\.adoc$/ }?.sort() ?: []
+        if (chapterFiles.size() != chapterCount) {
+            findings << checks.finding('src.chapters', "${lang}/adoc has ${chapterFiles.size()} chapter files, expected ${chapterCount}", chapterFiles.take(3).collect { [location: "${lang}/adoc/${it.name}".toString(), text: 'present'] })
+        }
+
+        def missingIncludes = [], missingImages = []
+        def sources = (mainFile.exists() ? [mainFile] : []) + (adocDir.listFiles()?.findAll { it.name.endsWith('.adoc') }?.sort() ?: [])
+        sources.each { File src ->
+            src.getText('UTF-8').readLines().eachWithIndex { String line, int i ->
+                def im = INCLUDE.matcher(line.trim())
+                if (im.find()) {
+                    def target = new File(src.parentFile, im.group(1))
+                    if (!target.exists()) missingIncludes << [location: "${lang}/${src.name}:${i + 1}".toString(), text: im.group(1)]
+                }
+                def gm = IMAGE.matcher(line)
+                while (gm.find()) {
+                    def ref = gm.group(1)
+                    if (ref.contains('{') || ref ==~ /(?i)^https?:.*/) continue   // attribute references and URLs are not checked
+                    def target = new File(langDir, "images/${ref}")
+                    if (!target.exists()) missingImages << [location: "${lang}/${src.name}:${i + 1}".toString(), text: ref]
+                }
+            }
+        }
+        if (missingIncludes) findings << checks.finding('src.includes', "${missingIncludes.size()} include target(s) missing", missingIncludes)
+        if (missingImages) findings << checks.finding('src.images', "${missingImages.size()} image(s) missing in ${lang}/images", missingImages)
+
+        findings = findings.findAll { it != null }
+        return [language: lang, style: '-', format: 'source', revnumber: props.revnumber, revdate: props.revdate,
+                durationMs: System.currentTimeMillis() - start, findings: findings, status: statusOf(findings)]
+    }
+
+    Map verifySource() {
+        return [name: 'source', cases: languages().collect { verifySourceCase(it) }]
+    }
+
+    /** Source suite first, then one suite per format */
+    List<Map> verifyAll(List<String> formats) {
+        return [verifySource()] + verifySuites(formats)
+    }
 }

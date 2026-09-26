@@ -494,6 +494,38 @@ section('verifier: verifySuites builds one suite per format with every language 
     assert suites[0].cases*.durationMs.every { it != null }
 }
 
+// ---- Task 8: source suite -----------------------------------------------------
+
+section('source suite: clean golden master passes') {
+    def cfg = makeFixture([:])
+    def v = verifierClass.newInstance(cfg, fixtureRoot, checksClass.newInstance(cfg))
+    def suite = v.verifySource()
+    assert suite.name == 'source' && suite.cases.size() == 1
+    assert suite.cases[0].status == 'pass', suite.cases[0].findings*.message.toString()
+    assert suite.cases[0].language == 'EN' && suite.cases[0].revnumber == '1.0-EN'
+}
+
+section('source suite: missing revdate, broken include, missing image, wrong chapter count, missing main') {
+    def cfg = makeFixture([:])
+    new File(fixtureRoot, 'gm/EN/version.properties').write("revnumber=1.0-EN\n", 'utf-8')
+    new File(fixtureRoot, 'gm/EN/demo-template.adoc').append('\ninclude::adoc/99_missing.adoc[]\n', 'utf-8')
+    new File(fixtureRoot, 'gm/EN/adoc/02_two.adoc').append('\nimage::not-there.png[]\n', 'utf-8')
+    new File(fixtureRoot, 'gm/EN/adoc/03_three.adoc').write('== Three\n', 'utf-8')
+    def v = verifierClass.newInstance(cfg, fixtureRoot, checksClass.newInstance(cfg))
+    def c = v.verifySource().cases[0]
+    expectRules(c.findings, ['src.versionProperties', 'src.includes', 'src.images', 'src.chapters'])
+    assert c.findings.find { it.ruleId == 'src.includes' }.examples[0].text.contains('99_missing.adoc')
+
+    assert new File(fixtureRoot, 'gm/EN/demo-template.adoc').delete()
+    expectRules(verifierClass.newInstance(cfg, fixtureRoot, checksClass.newInstance(cfg)).verifySource().cases[0].findings, ['src.mainFile'])
+}
+
+section('verifyAll puts the source suite first') {
+    def cfg = makeFixture(['demo-template-EN-withhelp-markdown.zip': GOOD_ZIP])
+    def v = verifierClass.newInstance(cfg, fixtureRoot, checksClass.newInstance(cfg))
+    assert v.verifyAll(['markdown'])*.name == ['source', 'markdown']
+}
+
 // ---- summary ----------------------------------------------------------------
 
 println failures ? "✗ ${failures.size()} section(s) failed: ${failures}" : "=== All Tests Passed! ==="
