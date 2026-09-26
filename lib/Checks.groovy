@@ -229,4 +229,225 @@ class Checks {
 
         return findings.findAll { it != null }
     }
+
+    // ---- archives ------------------------------------------------------------
+
+    /** Read a ZIP from bytes into name -> content. Directory entries are skipped. */
+    static Map<String, byte[]> unzip(byte[] bytes) {
+        def result = new LinkedHashMap<String, byte[]>()
+        new java.util.zip.ZipInputStream(new ByteArrayInputStream(bytes)).withCloseable { zis ->
+            java.util.zip.ZipEntry e
+            while ((e = zis.nextEntry) != null) {
+                if (!e.isDirectory()) result[e.name] = zis.readAllBytes()   // not zis.bytes: Groovy closes the stream
+                zis.closeEntry()
+            }
+        }
+        return result
+    }
+
+    /** For docx/epub: the single document package inside the dist ZIP, unpacked. Null when absent or unreadable. */
+    Map<String, byte[]> innerZip(Map ctx) {
+        def ext = '.' + extensionOf(ctx.format)
+        def name = (ctx.entries ?: [:]).keySet().find { it.toLowerCase().endsWith(ext) }
+        if (!name) return null
+        try { return unzip(ctx.entries[name]) } catch (Exception e) { return null }
+    }
+
+    // ---- format-aware text -----------------------------------------------------
+
+    private static final Pattern W_PARA = ~/(?s)<w:p[ >].*?<\/w:p>/
+    private static final Pattern W_STYLE = ~/<w:pStyle w:val="([^"]+)"/
+    private static final Pattern W_TEXT = ~/(?s)<w:t(?:\s[^>]*)?>(.*?)<\/w:t>/
+
+    /** DOCX paragraphs as [style, text] from word/document.xml; runs are joined without separator. */
+    List<List<String>> docxParagraphs(Map<String, byte[]> pkg) {
+        def xml = pkg?.get('word/document.xml')
+        if (!xml) return []
+        def text = new String(xml, 'UTF-8')
+        def result = []
+        def m = W_PARA.matcher(text)
+        while (m.find()) {
+            def p = m.group()
+            def sm = W_STYLE.matcher(p)
+            def style = sm.find() ? sm.group(1) : ''
+            def sb = new StringBuilder()
+            def tm = W_TEXT.matcher(p)
+            while (tm.find()) sb.append(tm.group(1))
+            result << [style, unescapeXml(sb.toString())]
+        }
+        return result
+    }
+
+    static String unescapeXml(String s) {
+        return s.replace('&lt;', '<').replace('&gt;', '>').replace('&quot;', '"').replace('&apos;', "'").replace('&amp;', '&')
+    }
+
+    /** EPUB content documents (xhtml manifest items except nav and title page), name -> text. */
+    Map<String, String> epubContentDocs(Map<String, byte[]> pkg) {
+        def result = new TreeMap<String, String>()
+        if (!pkg) return result
+        def opfName = pkg.keySet().find { it.toLowerCase().endsWith('.opf') }
+        if (!opfName) return result
+        def opfDir = opfName.contains('/') ? opfName.substring(0, opfName.lastIndexOf('/') + 1) : ''
+        def opf = new String(pkg[opfName], 'UTF-8')
+        def im = (~/<item\s[^>]*>/).matcher(opf)
+        while (im.find()) {
+            def item = im.group()
+            if (!item.contains('application/xhtml+xml') || item.contains('properties="nav"')) continue
+            def hm = (~/href="([^"]+)"/).matcher(item)
+            if (!hm.find()) continue
+            def href = hm.group(1)
+            if (href.contains('title_page')) continue
+            def entry = resolvePath(opfDir + 'x', href)
+            if (pkg[entry] != null) result[entry] = new String(pkg[entry], 'UTF-8')
+        }
+        return result
+    }
+
+    /** All visible text of the output, whitespace-normalised. Used for sentinel and revnumber matching. */
+    String plainText(Map ctx) {
+        switch (ctx.format) {
+            case 'html':
+                return normalize(textEntries(ctx).values().collect { Jsoup.parse(it).text() }.join(' '))
+            case 'docbook':
+                return normalize(textEntries(ctx).values().collect { it.replaceAll(/<[^>]+>/, ' ') }.join(' ')).with { unescapeXml(it) }
+            case 'docx':
+                return normalize(docxParagraphs(innerZip(ctx)).collect { it[1] }.join('\n'))
+            case 'epub':
+                return normalize(epubContentDocs(innerZip(ctx)).values().collect { Jsoup.parse(it).text() }.join(' '))
+            default:
+                // markdown, asciidoc, rst, textile, latex: the text as written
+                return normalize(textEntries(ctx).values().join('\n'))
+        }
+    }
+
+    // ---- headings --------------------------------------------------------------
+
+    /** Level at which chapters appear: Asciidoctor's book doctype renders chapters as h2 in HTML. */
+    int chapterLevel(String format) {
+        return format == 'html' ? 2 : 1
+    }
+
+    /** level -> count of non-empty headings, format-aware. Unknown formats return an empty map. */
+    Map<Integer, Integer> headingCounts(Map ctx) {
+        def counts = new TreeMap<Integer, Integer>()
+        def add = { int level -> counts[level] = (counts[level] ?: 0) + 1 }
+        def texts = textEntries(ctx)
+        String format = ctx.format
+
+        if (format in MD_FORMATS) {
+            texts.each { name, text ->
+                lines(text).each { l ->
+                    if (l.inFence) return
+                    def m = MD_HEADING.matcher(l.text)
+                    if (m.matches() && m.group(2).trim()) add(m.group(1).length())
+                }
+            }
+        } else if (format == 'asciidoc') {
+            texts.each { name, text ->
+                text.readLines().each { line ->
+                    def m = (~/^(={2,6})[ \t]+(\S.*)$/).matcher(line)
+                    if (m.matches()) add(m.group(1).length() - 1)
+                }
+            }
+        } else if (format in ['textile', 'textile2']) {
+            texts.each { name, text ->
+                text.readLines().each { line ->
+                    def m = (~/^h([1-6])(\([^)]*\))?\.[ \t]+(\S.*)$/).matcher(line)
+                    if (m.matches()) add(m.group(1) as int)
+                }
+            }
+        } else if (format == 'rst') {
+            texts.each { name, text ->
+                def ls = text.readLines()
+                def levelOfChar = [:]
+                for (int i = 1; i < ls.size(); i++) {
+                    def line = ls[i], prev = ls[i - 1]
+                    if (!(line ==~ /^([=\-~^"'`#*+:.])\1{2,}\s*$/)) continue
+                    if (!prev.trim() || prev ==~ /^([=\-~^"'`#*+:.])\1{2,}\s*$/) continue
+                    if (line.trim().length() < prev.trim().length()) continue
+                    boolean overlined = i >= 2 && ls[i - 2].trim() == line.trim()
+                    if (overlined) continue   // document title
+                    def ch = line.trim()[0]
+                    if (!levelOfChar.containsKey(ch)) levelOfChar[ch] = levelOfChar.size() + 1
+                    add(levelOfChar[ch])
+                }
+            }
+        } else if (format == 'latex') {
+            texts.each { name, text ->
+                boolean hasChapter = text.contains('\\chapter{')
+                def order = hasChapter ? ['chapter', 'section', 'subsection', 'subsubsection'] : ['section', 'subsection', 'subsubsection', 'paragraph']
+                def m = (~/\\(chapter|section|subsection|subsubsection|paragraph)\*?\{([^}]*)\}/).matcher(text)
+                while (m.find()) {
+                    int idx = order.indexOf(m.group(1))
+                    if (idx >= 0 && m.group(2).trim()) add(idx + 1)
+                }
+            }
+        } else if (format == 'html') {
+            texts.each { name, text ->
+                def doc = Jsoup.parse(text)
+                (1..6).each { lvl -> doc.select("h${lvl}").each { if (it.text().trim()) add(lvl) } }
+            }
+        } else if (format == 'docbook') {
+            texts.each { name, text ->
+                counts[1] = (counts[1] ?: 0) + (text =~ /<chapter[\s>]/).count
+                def sections = (text =~ /<section[\s>]/).count
+                if (sections) counts[2] = (counts[2] ?: 0) + sections
+            }
+        } else if (format == 'docx') {
+            docxParagraphs(innerZip(ctx)).each { p ->
+                def m = (~/^Heading(\d)$/).matcher(p[0])
+                if (m.matches() && p[1].trim()) add(m.group(1) as int)
+            }
+        } else if (format == 'epub') {
+            epubContentDocs(innerZip(ctx)).each { name, text ->
+                def doc = Jsoup.parse(text)
+                (1..6).each { lvl -> doc.select("h${lvl}").each { if (it.text().trim()) add(lvl) } }
+            }
+        }
+        return counts
+    }
+
+    // ---- structure rules -------------------------------------------------------
+
+    List<Map> checkStructure(Map ctx) {
+        def findings = []
+        if (!ctx.entries) return findings   // completeness rules report the missing ZIP
+
+        def counts = headingCounts(ctx)
+        int level = chapterLevel(ctx.format)
+        int chapters = counts[level] ?: 0
+        int expected = (ctx.chapterCount ?: 12) as int
+        if (chapters != expected) {
+            findings << finding('structure.chapters', "expected ${expected} chapter headings at level ${level}, found ${chapters}",
+                [[location: ctx.format, text: "heading counts by level: ${counts}".toString()]])
+        }
+
+        if (ctx.referenceCounts != null) {
+            def diffs = (counts.keySet() + ctx.referenceCounts.keySet()).sort().findAll { (counts[it] ?: 0) != (ctx.referenceCounts[it] ?: 0) }
+            if (diffs) {
+                findings << finding('structure.referenceCounts',
+                    "heading counts differ from reference: " + diffs.collect { "level ${it}: ${counts[it] ?: 0} vs ${ctx.referenceCounts[it] ?: 0}" }.join(', '),
+                    diffs.collect { [location: ctx.format, text: "level ${it}".toString()] })
+            }
+        }
+
+        def text = plainText(ctx)
+        if (ctx.helpSentinel) {
+            boolean present = text.contains(normalize(ctx.helpSentinel))
+            boolean wantHelp = ctx.style != 'plain'
+            if (wantHelp && !present) {
+                findings << finding('structure.helpText', "with-help output does not contain the help sentinel", [[location: ctx.format, text: ctx.helpSentinel.take(80)]])
+            } else if (!wantHelp && present) {
+                findings << finding('structure.helpText', "plain output contains help text", [[location: ctx.format, text: ctx.helpSentinel.take(80)]])
+            }
+        }
+
+        if (ctx.revnumber) {
+            if (!text.contains(normalize(ctx.revnumber))) {
+                findings << finding('structure.revnumber', "revnumber '${ctx.revnumber}' not found in output", [[location: ctx.format, text: ctx.revnumber]])
+            }
+        }
+        return findings.findAll { it != null }
+    }
 }

@@ -183,6 +183,109 @@ section('markdown: front matter title with image warns') {
     assert f != null && f.severity == 'warn'
 }
 
+// ---- Task 3: heading counts and structure -----------------------------------
+
+def zipBytes = { Map<String, Object> files ->
+    def bos = new ByteArrayOutputStream()
+    new ZipOutputStream(bos).withCloseable { zos ->
+        bytesOf(files).each { String name, byte[] data ->
+            zos.putNextEntry(new ZipEntry(name)); zos.write(data); zos.closeEntry()
+        }
+    }
+    return bos.toByteArray()
+}
+
+section('unzip reads entries into memory') {
+    def entries = checksClass.unzip(zipBytes(['a.md': 'hello', 'images/x.png': [1, 2] as byte[]]))
+    assert entries.keySet() == ['a.md', 'images/x.png'] as Set
+    assert new String(entries['a.md'], 'UTF-8') == 'hello'
+}
+
+section('headingCounts: markdown, asciidoc, textile, rst, latex, html, docbook') {
+    def checks = checksClass.newInstance(baseConfig())
+    def count = { String format, Map files -> checks.headingCounts(ctxOf([format: format, entries: bytesOf(files)])) }
+
+    assert count('markdown', ['x.md': '# \n\n# One\n\n## Sub\n\n### Deep\n\n# Two\n\n```\n# code\n```\n']) == [1: 2, 2: 1, 3: 1]
+    assert count('asciidoc', ['demo-template.adoc': '= Title\n\ninclude::src/01.adoc[]\n', 'src/01.adoc': '== One\n\n=== Sub\n', 'src/02.adoc': '== Two\n']) == [1: 2, 2: 1]
+    assert count('textile', ['x.textile': 'h1. \n\nh1(#one). One\n\nh2(#sub). Sub\n\nh1. Two\n']) == [1: 2, 2: 1]
+    assert count('rst', ['x.rst': '=====\nTitle\n=====\n\nOne\n===\n\nSub\n---\n\nTwo\n===\n']) == [1: 2, 2: 1]
+    assert count('latex', ['x.tex': '\\section{}\n\\section{One}\\label{a}\n\\subsection{Sub}\n\\section{Two}\n']) == [1: 2, 2: 1]
+    assert count('latex', ['x.tex': '\\chapter{One}\n\\section{Sub}\n\\chapter{Two}\n']) == [1: 2, 2: 1], "chapter present: chapter is level 1"
+    assert count('html', ['demo-template.html': '<html><body><h1>T</h1><h2 id="a">One</h2><h3>Sub</h3><h2>Two</h2><h2></h2></body></html>']) == [1: 1, 2: 2, 3: 1]
+    assert count('docbook', ['demo-template.xml': '<book><chapter><title>One</title><section><title>S</title></section></chapter><chapter><title>Two</title></chapter></book>']) == [1: 2, 2: 1]
+}
+
+def DOCX_XML = { List<List> paragraphs ->
+    // paragraphs: [[style, text], ...]
+    def body = paragraphs.collect { p ->
+        def style = p[0] ? "<w:pPr><w:pStyle w:val=\"${p[0]}\"/></w:pPr>" : ''
+        "<w:p>${style}<w:r><w:t>${p[1]}</w:t></w:r></w:p>"
+    }.join('')
+    return """<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>${body}</w:body></w:document>"""
+}
+
+section('headingCounts and plainText: docx and epub') {
+    def checks = checksClass.newInstance(baseConfig())
+    def docx = zipBytes(['word/document.xml': DOCX_XML([['Title', 'T'], ['Heading1', ''], ['Heading1', 'One'], ['Heading2', 'Sub'], ['BodyText', 'HELP SENTINEL SENTENCE FOR TESTS 1.0-EN'], ['Heading1', 'Two']])])
+    def dctx = ctxOf([format: 'docx', entries: ['demo-template-EN.docx': docx]])
+    assert checks.headingCounts(dctx) == [1: 2, 2: 1]
+    assert checks.plainText(dctx).contains('HELP SENTINEL SENTENCE FOR TESTS 1.0-EN')
+
+    def epub = zipBytes([
+        'mimetype': 'application/epub+zip',
+        'META-INF/container.xml': '<container><rootfiles><rootfile full-path="EPUB/content.opf"/></rootfiles></container>',
+        'EPUB/content.opf': '<package><manifest><item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/><item id="t" href="text/title_page.xhtml" media-type="application/xhtml+xml"/><item id="c1" href="text/ch001.xhtml" media-type="application/xhtml+xml"/><item id="c2" href="text/ch002.xhtml" media-type="application/xhtml+xml"/><item id="i" href="media/f.png" media-type="image/png"/></manifest></package>',
+        'EPUB/nav.xhtml': '<html><body><h1>Contents</h1></body></html>',
+        'EPUB/text/title_page.xhtml': '<html><body><h1>Title</h1></body></html>',
+        'EPUB/text/ch001.xhtml': '<html><body><h1></h1><p>about</p></body></html>',
+        'EPUB/text/ch002.xhtml': '<html><body><h1>One</h1><h2>Sub</h2><p>HELP SENTINEL SENTENCE FOR TESTS</p><h1>Two</h1></body></html>',
+        'EPUB/media/f.png': [1] as byte[]])
+    def ectx = ctxOf([format: 'epub', entries: ['demo-template-EN.epub': epub]])
+    assert checks.headingCounts(ectx) == [1: 2, 2: 1], "nav and title page are excluded, empty h1 is not counted"
+    assert checks.plainText(ectx).contains('HELP SENTINEL SENTENCE FOR TESTS')
+}
+
+section('structure: chapters, help text, revnumber') {
+    def checks = checksClass.newInstance(baseConfig())
+    def good = ctxOf([entries: bytesOf(['demo-template-EN.md': GOOD_MD])])
+    assert checks.checkStructure(good).isEmpty(), checks.checkStructure(good)*.message.toString()
+
+    def oneChapter = ctxOf([entries: bytesOf(['demo-template-EN.md': '# Only\n\nHELP SENTINEL SENTENCE FOR TESTS 1.0-EN\n'])])
+    expectRules(checks.checkStructure(oneChapter), ['structure.chapters'])
+
+    def plainWithHelp = ctxOf([style: 'plain', entries: bytesOf(['demo-template-EN.md': GOOD_MD])])
+    expectRules(checks.checkStructure(plainWithHelp), ['structure.helpText'])
+
+    def helpMissing = ctxOf([entries: bytesOf(['demo-template-EN.md': '# One\n\nVersion 1.0-EN\n\n# Two\n'])])
+    expectRules(checks.checkStructure(helpMissing), ['structure.helpText'])
+
+    def noRev = ctxOf([entries: bytesOf(['demo-template-EN.md': '# One\n\nHELP SENTINEL SENTENCE FOR TESTS\n\n# Two\n'])])
+    expectRules(checks.checkStructure(noRev), ['structure.revnumber'])
+
+    def noSentinelKnown = ctxOf([helpSentinel: null, entries: bytesOf(['demo-template-EN.md': GOOD_MD])])
+    noRule(checks.checkStructure(noSentinelKnown), 'structure.helpText')
+}
+
+section('structure: revnumber with space matches after normalisation') {
+    def checks = checksClass.newInstance(baseConfig())
+    def md = '# One\n\nHELP SENTINEL SENTENCE FOR TESTS\nTemplate Version 8.2\nES\n\n# Two\n'
+    noRule(checks.checkStructure(ctxOf([revnumber: '8.2 ES', entries: bytesOf(['x.md': md])])), 'structure.revnumber')
+}
+
+section('structure: reference counts warn on mismatch') {
+    def checks = checksClass.newInstance(baseConfig())
+    def ctx = ctxOf([entries: bytesOf(['x.md': GOOD_MD]), referenceCounts: [1: 2, 2: 3]])
+    def f = checks.checkStructure(ctx).find { it.ruleId == 'structure.referenceCounts' }
+    assert f != null && f.severity == 'warn' && f.message.contains('level 2')
+    noRule(checks.checkStructure(ctxOf([entries: bytesOf(['x.md': GOOD_MD]), referenceCounts: [1: 2, 2: 1]])), 'structure.referenceCounts')
+}
+
+section('structure: html chapters are h2') {
+    def checks = checksClass.newInstance(baseConfig())
+    def html = '<html><head><title>T</title></head><body><h1>T</h1><h2>One</h2><p>HELP SENTINEL SENTENCE FOR TESTS 1.0-EN</p><h2>Two</h2></body></html>'
+    assert checks.checkStructure(ctxOf([format: 'html', entries: bytesOf(['demo-template.html': html])])).isEmpty()
+}
+
 // ---- summary ----------------------------------------------------------------
 
 println failures ? "✗ ${failures.size()} section(s) failed: ${failures}" : "=== All Tests Passed! ==="
