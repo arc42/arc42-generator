@@ -412,6 +412,88 @@ section('epub: missing manifest item, missing container, no images in with-help'
     noRule(checks.checkEpub(ctxOf([format: 'epub', style: 'plain', entries: ['demo-template-EN.epub': zipBytes(noImages)]])), 'epub.media')
 }
 
+// ---- Task 7: Verifier ---------------------------------------------------------
+
+def verifierClass = gcl.parseClass(new File('lib/Verifier.groovy'))
+
+def fixtureRoot = new File('build/test-verifier')
+def makeFixture = { Map<String, Object> zips ->
+    if (fixtureRoot.exists()) fixtureRoot.deleteDir()
+    new File(fixtureRoot, 'gm/EN/adoc').mkdirs()
+    new File(fixtureRoot, 'gm/EN/images').mkdirs()
+    new File(fixtureRoot, 'gm/EN/version.properties').write("revnumber=1.0-EN\nrevdate=September 2026\nrevremark=(test)\n", 'utf-8')
+    new File(fixtureRoot, 'gm/EN/demo-template.adoc').write('= Demo\n\ninclude::adoc/config.adoc[]\n\ninclude::adoc/01_one.adoc[]\n\ninclude::adoc/02_two.adoc[]\n', 'utf-8')
+    new File(fixtureRoot, 'gm/EN/adoc/config.adoc').write(':imagesdir: ./images\n:demohelp:\n', 'utf-8')
+    new File(fixtureRoot, 'gm/EN/adoc/01_one.adoc').write('''== Chapter One
+
+ifdef::demohelp[]
+[role="demohelp"]
+****
+.Contents
+* a bullet first
+HELP SENTINEL SENTENCE FOR TESTS.
+****
+endif::demohelp[]
+
+image::demo-logo.png[]
+''', 'utf-8')
+    new File(fixtureRoot, 'gm/EN/adoc/02_two.adoc').write('== Chapter Two\n\ntext\n', 'utf-8')
+    new File(fixtureRoot, 'gm/EN/images/demo-logo.png').bytes = [1, 2, 3] as byte[]
+    new File(fixtureRoot, 'dist').mkdirs()
+    zips.each { String name, Object files -> new File(fixtureRoot, "dist/${name}").bytes = zipBytes(files as Map) }
+    def cfg = baseConfig()
+    cfg.formats = ['markdown': [imageFolder: true], 'markdownMP': [imageFolder: true]]
+    return cfg
+}
+
+def GOOD_ZIP = ['demo-template-EN.md': GOOD_MD, 'images/demo-logo.png': [1] as byte[]]
+def PLAIN_ZIP = ['demo-template-EN.md': '# Chapter One\n\nTemplate Version 1.0-EN\n\n# Chapter Two\n', 'images/demo-logo.png': [1] as byte[]]
+
+section('verifier: languages, styles, version properties, sentinel skips label lines') {
+    def cfg = makeFixture([:])
+    def v = verifierClass.newInstance(cfg, fixtureRoot, checksClass.newInstance(cfg))
+    assert v.languages() == ['EN']
+    assert v.styles() == ['plain', 'with-help']
+    assert v.versionProps('EN').revnumber == '1.0-EN' && v.versionProps('EN').revdate == 'September 2026'
+    assert v.versionProps('XX') == [:]
+    assert v.helpSentinel('EN') == 'HELP SENTINEL SENTENCE FOR TESTS.', "got '${v.helpSentinel('EN')}'"
+    assert v.zipFile('EN', 'with-help', 'markdown').name == 'demo-template-EN-withhelp-markdown.zip'
+}
+
+section('verifier: buildContext and verifyCase on a good and a missing zip') {
+    def cfg = makeFixture(['demo-template-EN-withhelp-markdown.zip': GOOD_ZIP])
+    def v = verifierClass.newInstance(cfg, fixtureRoot, checksClass.newInstance(cfg))
+    def ctx = v.buildContext('EN', 'with-help', 'markdown')
+    assert ctx.entries.keySet() == GOOD_ZIP.keySet() && ctx.revnumber == '1.0-EN' && ctx.chapterCount == 2
+    assert ctx.referenceCounts == null, "EN is the reference language"
+    def good = v.verifyCase('EN', 'with-help', 'markdown')
+    assert good.status == 'pass' && good.revnumber == '1.0-EN' && good.revdate == 'September 2026', good.findings*.message.toString()
+    def missing = v.verifyCase('EN', 'plain', 'markdown')
+    assert missing.status == 'fail' && missing.findings*.ruleId == ['zip.exists']
+}
+
+section('verifier: reference counts come from the reference language') {
+    def cfg = makeFixture(['demo-template-EN-withhelp-markdown.zip': GOOD_ZIP, 'demo-template-DE-withhelp-markdown.zip': ['demo-template-DE.md': '# Eins\n\nHELP SENTINEL SENTENCE FOR TESTS 1.0-DE\n\n## Extra\n\n## Extra2\n\n# Zwei\n', 'images/l.png': [1] as byte[]]])
+    new File(fixtureRoot, 'gm/DE/adoc').mkdirs()
+    new File(fixtureRoot, 'gm/DE/version.properties').write("revnumber=1.0-DE\nrevdate=2026\n", 'utf-8')
+    new File(fixtureRoot, 'gm/DE/adoc/01_one.adoc').write('== Eins\n\n[role="demohelp"]\n****\nHELP SENTINEL SENTENCE FOR TESTS\n****\n', 'utf-8')
+    def v = verifierClass.newInstance(cfg, fixtureRoot, checksClass.newInstance(cfg))
+    def de = v.buildContext('DE', 'with-help', 'markdown')
+    assert de.referenceCounts == [1: 2, 2: 1], "EN GOOD_MD has 2 H1 and 1 H2, got ${de.referenceCounts}"
+    def result = v.verifyCase('DE', 'with-help', 'markdown')
+    assert result.status == 'warn' && result.findings*.ruleId == ['structure.referenceCounts'], result.findings*.message.toString()
+}
+
+section('verifier: verifySuites builds one suite per format with every language x style') {
+    def cfg = makeFixture(['demo-template-EN-withhelp-markdown.zip': GOOD_ZIP, 'demo-template-EN-plain-markdown.zip': PLAIN_ZIP])
+    def v = verifierClass.newInstance(cfg, fixtureRoot, checksClass.newInstance(cfg))
+    def suites = v.verifySuites(['markdown', 'markdownMP'])
+    assert suites*.name == ['markdown', 'markdownMP']
+    assert suites[0].cases*.status == ['pass', 'pass'], suites[0].cases.collect { "${it.style}: ${it.findings*.message}" }.toString()
+    assert suites[1].cases*.status == ['fail', 'fail'], "markdownMP zips do not exist"
+    assert suites[0].cases*.durationMs.every { it != null }
+}
+
 // ---- summary ----------------------------------------------------------------
 
 println failures ? "✗ ${failures.size()} section(s) failed: ${failures}" : "=== All Tests Passed! ==="
