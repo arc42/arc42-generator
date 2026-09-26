@@ -52,3 +52,21 @@ distribution {
     targetPath = "arc42-template/dist/"
     //formats = ['asciidoc','html','epub','markdown','docx','docbook']
 }
+
+verify {
+    // language whose heading structure other languages are compared against
+    referenceLanguage = 'EN'
+    // number of top-level chapters every output must contain
+    chapterCount = 12
+    // reports are written here, relative to this file
+    reportDir = 'build/reports'
+    // HTML tags tolerated in Markdown output, per format (strict Markdown has no tables)
+    allowedHtml = [
+        markdownStrict:   ['table', 'thead', 'tbody', 'tr', 'th', 'td', 'col', 'colgroup'],
+        markdownMPStrict: ['table', 'thead', 'tbody', 'tr', 'th', 'td', 'col', 'colgroup'],
+    ]
+    // rule id -> 'error' | 'warn' | 'off'; overrides the built-in default severity
+    severity = [
+        // 'md.rawHtml': 'warn',
+    ]
+}
