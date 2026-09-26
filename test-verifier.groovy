@@ -286,6 +286,47 @@ section('structure: html chapters are h2') {
     assert checks.checkStructure(ctxOf([format: 'html', entries: bytesOf(['demo-template.html': html])])).isEmpty()
 }
 
+// ---- Task 4: completeness and dispatch ----------------------------------------
+
+section('completeness: missing zip yields single finding') {
+    def checks = checksClass.newInstance(baseConfig())
+    def findings = checks.checkAll(ctxOf([entries: null, zipFile: new File('build/test-verifier/does-not-exist.zip')]))
+    assert findings*.ruleId == ['zip.exists'], "got ${findings*.ruleId}"
+}
+
+section('completeness: empty zip, primary file, images') {
+    def checks = checksClass.newInstance(baseConfig())
+    expectRules(checks.checkCompleteness(ctxOf([entries: [:]])), ['zip.nonEmpty'])
+    expectRules(checks.checkCompleteness(ctxOf([entries: bytesOf(['images/demo-logo.png': [1] as byte[]])])), ['zip.primaryFile'])
+    // binary-only zip must not crash the text rules either
+    def all = checks.checkAll(ctxOf([entries: bytesOf(['images/demo-logo.png': [1] as byte[]])]))
+    expectRules(all, ['zip.primaryFile'])
+    // with-help + imageFolder true needs images/
+    expectRules(checks.checkCompleteness(ctxOf([entries: bytesOf(['demo-template-EN.md': GOOD_MD])])), ['zip.images'])
+    noRule(checks.checkCompleteness(ctxOf([style: 'plain', entries: bytesOf(['demo-template-EN.md': GOOD_MD])])), 'zip.images')
+    noRule(checks.checkCompleteness(ctxOf([format: 'epub', formatConfig: [imageFolder: false], entries: bytesOf(['demo-template-EN.epub': [1] as byte[]])])), 'zip.images')
+    // mkdocs keeps images under docs/images
+    noRule(checks.checkCompleteness(ctxOf([format: 'mkdocs', entries: bytesOf(['demo-template-EN.md': GOOD_MD, 'docs/images/l.png': [1] as byte[]])])), 'zip.images')
+}
+
+section('completeness: primary file names per family') {
+    def checks = checksClass.newInstance(baseConfig())
+    assert checks.primaryFiles(ctxOf([format: 'html', entries: bytesOf(['demo-template.html': 'x', 'images/a.png': [1] as byte[]])])) == ['demo-template.html']
+    assert checks.primaryFiles(ctxOf([format: 'asciidoc', entries: bytesOf(['demo-template.adoc': 'x', 'src/01.adoc': 'y'])])) == ['demo-template.adoc', 'src/01.adoc']
+    assert checks.primaryFiles(ctxOf([format: 'mkdocs', entries: bytesOf(['docs/index.md': 'x'])])) == ['docs/index.md'], "recursive search"
+}
+
+section('completeness: multi-page needs chapterCount chapter files and no config file') {
+    def checks = checksClass.newInstance(baseConfig())
+    def single = ctxOf([format: 'markdownMP', entries: bytesOf(['demo-template-EN.md': GOOD_MD, 'images/l.png': [1] as byte[]])])
+    def f = checks.checkCompleteness(single).find { it.ruleId == 'zip.primaryFile' }
+    assert f != null && f.message.contains('0 chapter file(s)'), f?.message
+    def good = ctxOf([format: 'markdownMP', entries: bytesOf(['01_a.md': '# One\n', '02_b.md': '# Two\n', 'images/l.png': [1] as byte[]])])
+    noRule(checks.checkCompleteness(good), 'zip.primaryFile')
+    def withConfig = ctxOf([format: 'markdownMP', entries: bytesOf(['01_a.md': '# One\n', '02_b.md': '# Two\n', 'config.md': '', 'images/l.png': [1] as byte[]])])
+    assert checks.checkCompleteness(withConfig).find { it.ruleId == 'zip.primaryFile' }.message.contains('config.md')
+}
+
 // ---- summary ----------------------------------------------------------------
 
 println failures ? "✗ ${failures.size()} section(s) failed: ${failures}" : "=== All Tests Passed! ==="

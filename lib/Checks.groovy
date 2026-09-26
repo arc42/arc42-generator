@@ -450,4 +450,61 @@ class Checks {
         }
         return findings.findAll { it != null }
     }
+
+    // ---- completeness ------------------------------------------------------------
+
+    /** Entries with the format's extension, any directory depth, sorted. */
+    List<String> primaryFiles(Map ctx) {
+        def ext = '.' + extensionOf(ctx.format)
+        return (ctx.entries ?: [:]).keySet().findAll { it.toLowerCase().endsWith(ext) }.sort()
+    }
+
+    List<Map> checkCompleteness(Map ctx) {
+        def findings = []
+        if (ctx.entries == null) {
+            findings << finding('zip.exists', "ZIP not found: ${ctx.zipFile?.name ?: '(unknown)'}", [[location: ctx.zipFile?.path ?: '', text: 'missing']])
+            return findings.findAll { it != null }
+        }
+        if (ctx.entries.isEmpty() || ctx.entries.values().every { it.length == 0 }) {
+            findings << finding('zip.nonEmpty', "ZIP has no non-empty entries")
+            return findings.findAll { it != null }
+        }
+
+        def primaries = primaryFiles(ctx)
+        def ext = extensionOf(ctx.format)
+        if (ctx.format in MP_FORMATS) {
+            int expected = (ctx.chapterCount ?: 12) as int
+            def chapterFiles = primaries.findAll { (it.tokenize('/').last() ==~ /^\d\d_.*\.${ext}$/) }
+            def configFile = primaries.find { it.tokenize('/').last() == "config.${ext}" }
+            if (chapterFiles.size() < expected || configFile) {
+                def msg = chapterFiles.size() < expected ? "multi-page ZIP has ${chapterFiles.size()} chapter file(s), expected at least ${expected}" : "multi-page ZIP contains boilerplate ${configFile}"
+                findings << finding('zip.primaryFile', msg, primaries.take(3).collect { [location: it, text: 'present'] })
+            }
+        } else if (primaries.isEmpty()) {
+            findings << finding('zip.primaryFile', "no *.${ext} file in ZIP", ctx.entries.keySet().take(3).collect { [location: it, text: 'present'] })
+        }
+
+        if (ctx.formatConfig?.imageFolder && ctx.style != 'plain') {
+            def imagePrefix = ctx.format in ['mkdocs', 'mkdocsMP'] ? 'docs/images/' : 'images/'
+            if (!ctx.entries.keySet().any { it.startsWith(imagePrefix) && ctx.entries[it].length > 0 }) {
+                findings << finding('zip.images', "with-help ZIP has no entries under ${imagePrefix}")
+            }
+        }
+        return findings.findAll { it != null }
+    }
+
+    // ---- dispatch ---------------------------------------------------------------
+
+    /** Run every rule family that applies to the context's format. */
+    List<Map> checkAll(Map ctx) {
+        def findings = checkCompleteness(ctx)
+        // no ZIP, empty ZIP or no primary file: content rules would only add noise
+        if (ctx.entries == null || ctx.entries.isEmpty() || findings.any { it.ruleId == 'zip.primaryFile' }) return findings
+        findings.addAll(checkStructure(ctx))
+        if (ctx.format in MD_FORMATS) findings.addAll(checkMarkdown(ctx))
+        if (ctx.format == 'html' && respondsTo('checkHtml')) findings.addAll(checkHtml(ctx))
+        if (ctx.format == 'docx' && respondsTo('checkDocx')) findings.addAll(checkDocx(ctx))
+        if (ctx.format == 'epub' && respondsTo('checkEpub')) findings.addAll(checkEpub(ctx))
+        return findings
+    }
 }
