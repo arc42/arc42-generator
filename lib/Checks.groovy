@@ -507,4 +507,40 @@ class Checks {
         if (ctx.format == 'epub' && respondsTo('checkEpub')) findings.addAll(checkEpub(ctx))
         return findings
     }
+
+    // ---- HTML -------------------------------------------------------------------
+
+    List<Map> checkHtml(Map ctx) {
+        def findings = []
+        textEntries(ctx).each { String name, String text ->
+            int htmlOpen = (text =~ /(?i)<html[\s>]/).count, htmlClose = (text =~ /(?i)<\/html>/).count
+            int bodyOpen = (text =~ /(?i)<body[\s>]/).count, bodyClose = (text =~ /(?i)<\/body>/).count
+            if ([htmlOpen, htmlClose, bodyOpen, bodyClose] != [1, 1, 1, 1]) {
+                findings << finding('html.wellFormed', "${name}: expected exactly one html and body element, found html ${htmlOpen}/${htmlClose}, body ${bodyOpen}/${bodyClose}", [[location: name, text: 'structure']])
+            }
+            def doc = Jsoup.parse(text)
+            if (!doc.title()?.trim()) findings << finding('html.title', "${name}: <title> missing or empty", [[location: name, text: '<title>']])
+
+            boolean charset = doc.select('meta[charset]').any { it.attr('charset').equalsIgnoreCase('utf-8') } ||
+                doc.select('meta[http-equiv]').any { it.attr('content').toLowerCase().contains('utf-8') }
+            if (!charset) findings << finding('html.charset', "${name}: no UTF-8 charset declaration", [[location: name, text: '<meta charset>']])
+
+            def missing = []
+            doc.select('img[src]').each { img ->
+                def src = img.attr('src')
+                if (isRemote(src)) return
+                def resolved = resolvePath(name, src)
+                if (!ctx.entries.containsKey(resolved)) missing << [location: name, text: src]
+            }
+            if (missing) findings << finding('html.images', "${name}: ${missing.size()} image source(s) not found in ZIP", missing)
+
+            def broken = []
+            doc.select('a[href^=#]').each { a ->
+                def id = a.attr('href').substring(1)
+                if (id && doc.getElementById(id) == null && doc.select("a[name=${id}]").isEmpty()) broken << [location: name, text: a.attr('href')]
+            }
+            if (broken) findings << finding('html.localLinks', "${name}: ${broken.size()} local link(s) without target", broken)
+        }
+        return findings.findAll { it != null }
+    }
 }

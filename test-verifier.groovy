@@ -327,6 +327,33 @@ section('completeness: multi-page needs chapterCount chapter files and no config
     assert checks.checkCompleteness(withConfig).find { it.ruleId == 'zip.primaryFile' }.message.contains('config.md')
 }
 
+// ---- Task 5: HTML -----------------------------------------------------------
+
+def GOOD_HTML = '''<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Template</title></head>
+<body><h1>Template</h1><div id="toc"><a href="#one">One</a></div>
+<h2 id="one">One</h2><p>HELP SENTINEL SENTENCE FOR TESTS 1.0-EN</p><img src="images/demo-logo.png" alt="logo">
+<h2 id="two">Two</h2><a href="https://arc42.org">ext</a></body></html>'''
+
+section('html: clean document') {
+    def checks = checksClass.newInstance(baseConfig())
+    def ctx = ctxOf([format: 'html', entries: bytesOf(['demo-template.html': GOOD_HTML, 'images/demo-logo.png': [1] as byte[]])])
+    assert checks.checkAll(ctx).isEmpty(), checks.checkAll(ctx)*.message.toString()
+}
+
+section('html: missing title, charset, image, broken anchor, malformed') {
+    def checks = checksClass.newInstance(baseConfig())
+    def bad = '<html><head><title></title></head><body><h2>One</h2><a href="#nowhere">x</a><img src="images/gone.png"></body></html>'
+    def findings = checks.checkHtml(ctxOf([format: 'html', entries: bytesOf(['demo-template.html': bad])]))
+    expectRules(findings, ['html.title', 'html.charset', 'html.images', 'html.localLinks'])
+    assert findings.find { it.ruleId == 'html.localLinks' }.severity == 'warn'
+    noRule(findings, 'html.wellFormed')
+
+    def twoBodies = '<html><head><meta charset="utf-8"><title>T</title></head><body></body><body></body></html>'
+    expectRules(checks.checkHtml(ctxOf([format: 'html', entries: bytesOf(['demo-template.html': twoBodies])])), ['html.wellFormed'])
+    def noHtmlTag = '<h2>One</h2>'
+    expectRules(checks.checkHtml(ctxOf([format: 'html', entries: bytesOf(['demo-template.html': noHtmlTag])])), ['html.wellFormed'])
+}
+
 // ---- summary ----------------------------------------------------------------
 
 println failures ? "✗ ${failures.size()} section(s) failed: ${failures}" : "=== All Tests Passed! ==="
