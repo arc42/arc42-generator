@@ -51,7 +51,9 @@ class Checks {
     // ---- severity and findings ----------------------------------------------
 
     String severityOf(String ruleId) {
-        def override = config.verify?.severity?.get(ruleId)
+        // an empty `[ ]` in the config is a List, not a Map; only Maps carry overrides
+        def overrides = config.verify?.severity
+        def override = overrides instanceof Map ? overrides[ruleId] : null
         if (override in ['error', 'warn', 'off']) return override
         return DEFAULT_SEVERITY[ruleId] ?: 'error'
     }
@@ -67,6 +69,16 @@ class Checks {
     static String normalize(String s) {
         if (s == null) return ''
         return s.replaceAll(/[\s ]+/, ' ').trim()
+    }
+
+    /**
+     * Canonical form for content matching: entities decoded (Textile writes 9.0&#45;EN, Asciidoctor
+     * writes l&#8217;equipe), typographic quotes folded to ASCII, whitespace normalised.
+     */
+    static String canon(String s) {
+        if (s == null) return ''
+        def decoded = org.jsoup.parser.Parser.unescapeEntities(s, false)
+        return normalize(decoded.replaceAll(/[\u2018\u2019\u201A\u201B\u2032]/, "'").replaceAll(/[\u201C\u201D\u201E\u201F\u2033]/, '"'))
     }
 
     String extensionOf(String format) {
@@ -148,7 +160,8 @@ class Checks {
 
     List<Map> checkMarkdown(Map ctx) {
         def findings = []
-        def allowed = ((config.verify?.allowedHtml?.get(ctx.format)) ?: []).collect { it.toString().toLowerCase() } as Set
+        def allowedHtml = config.verify?.allowedHtml
+        def allowed = ((allowedHtml instanceof Map ? allowedHtml[ctx.format] : null) ?: []).collect { it.toString().toLowerCase() } as Set
         def texts = textEntries(ctx)
 
         def pandoc = [], rawHtml = [], rawTagNames = [] as Set, empty = [], missingImages = [], commonmarkHtml = [], mpNoHeading = [], frontMatter = []
@@ -432,9 +445,9 @@ class Checks {
             }
         }
 
-        def text = plainText(ctx)
+        def text = canon(plainText(ctx))
         if (ctx.helpSentinel) {
-            boolean present = text.contains(normalize(ctx.helpSentinel))
+            boolean present = text.contains(canon(ctx.helpSentinel))
             boolean wantHelp = ctx.style != 'plain'
             if (wantHelp && !present) {
                 findings << finding('structure.helpText', "with-help output does not contain the help sentinel", [[location: ctx.format, text: ctx.helpSentinel.take(80)]])
@@ -444,7 +457,7 @@ class Checks {
         }
 
         if (ctx.revnumber) {
-            if (!text.contains(normalize(ctx.revnumber))) {
+            if (!text.contains(canon(ctx.revnumber))) {
                 findings << finding('structure.revnumber', "revnumber '${ctx.revnumber}' not found in output", [[location: ctx.format, text: ctx.revnumber]])
             }
         }

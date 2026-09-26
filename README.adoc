@@ -101,14 +101,19 @@ docker compose run --rm -v /path/to/req42-framework:/project arc42-builder \
 
 === Build Validation
 
-The build includes automatic validation:
+The fifth build phase `verify` inspects every distribution ZIP and the Golden Master:
 
-* **CommonMark validation**: Validates generated Markdown files against GitHub-flavored Markdown spec using `cmark`
-* **Image validation**: Checks that all image references exist in with-help flavors (markdown, asciidoc, textile, rst, html)
-* **Submodule integrity**: Ensures arc42-template submodule is up-to-date
+* **Completeness**: every language × style × format ZIP exists and contains the expected files
+* **Structure**: twelve chapters, help text present only in with-help, template version present
+* **Markdown purity**: no pandoc-only syntax, no raw HTML, valid CommonMark, images resolve
+* **HTML, DOCX, EPUB**: well-formed packages, images embedded or referenced correctly
+* **Source**: version.properties, includes and image references of each language
 
-All validations are non-fatal - the build continues even if warnings are reported.
-
+Results are written to `build/reports/junit/TEST-*.xml` (JUnit XML, usable in any CI) and
+`build/reports/verify.html` (matrix of languages × formats with the template version per language).
+A failing check makes `groovy build.groovy` exit with code 1. Run `groovy build.groovy verify`
+to check the committed ZIPs without rebuilding. Rule severities can be adjusted in the
+`verify` block of `buildconfig.groovy`.
 
 
 === Docker Image Details

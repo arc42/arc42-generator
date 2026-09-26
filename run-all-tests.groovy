@@ -38,6 +38,11 @@ def tests = [
         name: "Custom Project Config",
         script: "test-config.groovy",
         description: "Tests building a project other than arc42 from its own config file"
+    ],
+    [
+        name: "Verify Phase",
+        script: "test-verifier.groovy",
+        description: "Tests distribution checks, golden master validation and JUnit/HTML reporting"
     ]
 ]
 

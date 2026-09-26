@@ -36,6 +36,7 @@ groovy build.groovy
 groovy build.groovy templates      # Phase 1: Generate templates from golden master
 groovy build.groovy convert        # Phases 2-3: Discover + convert templates
 groovy build.groovy distribution   # Phase 4: Create distribution ZIP files
+groovy build.groovy verify         # Phase 5: Verify distribution ZIPs, write reports
 
 # Format-specific build (faster)
 groovy build.groovy --format=html  # Build only HTML format
@@ -55,6 +56,7 @@ groovy build.groovy --format=html  # Build only HTML format
 3. **Template Discovery** (`lib/Discovery.groovy`) → Scans generated templates and extracts metadata
 4. **Format Conversion** (`lib/Converter.groovy`) → Converts AsciiDoc to HTML, Markdown, DOCX, etc. using AsciidoctorJ and Pandoc
 5. **Distribution** (`lib/Packager.groovy`) → Packages everything into ZIP files for download
+6. **Verification** (`lib/Verifier.groovy`, `lib/Checks.groovy`, `lib/Report.groovy`) → Checks ZIPs and Golden Master, writes `build/reports/`
 
 ### Core Components
 
@@ -88,9 +90,15 @@ Main orchestration script that ties everything together. Supports CLI arguments 
 
 **Performance**: Creates 18 ZIPs in ~0.6s (vs ~15s with Gradle)
 
+#### `lib/Verifier.groovy`, `lib/Checks.groovy`, `lib/Report.groovy`
+- **Verifier**: builds the expected matrix (languages × styles × formats), reads dist ZIPs in memory, supplies version.properties, help sentinel and reference heading counts; also runs the `source` suite on the Golden Master
+- **Checks**: the rule catalogue (`zip.*`, `structure.*`, `md.*`, `html.*`, `docx.*`, `epub.*`, `src.*`); pure functions over a context map, default severities overridable via `verify.severity` in the config
+- **Report**: JUnit XML (`build/reports/junit/TEST-<format>.xml`), self-contained HTML matrix (`build/reports/verify.html`), console summary; a failed case makes `build.groovy` exit 1
+
 ### Key Configuration Files
 - **buildconfig.groovy**: Defines template styles, output formats, and paths
   - `templateStyles`: `plain` (no help), `with-help` (includes help text)
+  - `verify`: reference language, chapter count, report directory, allowed HTML per Markdown format, severity overrides
   - `formats`: 15+ output formats including asciidoc, html, markdown, docx, epub, latex, etc.
   - `goldenMaster`: Path to arc42-template submodule
 
@@ -136,6 +144,7 @@ The Golden Master uses AsciiDoc role attributes to mark content (prefix set by `
 - `build/src_gen/`: Generated AsciiDoc templates (plain, with-help variants)
 - `build/<LANG>/<FORMAT>/`: Converted templates by language and format
 - `arc42-template/dist/`: Final distribution ZIP files ready for upload
+- `build/reports/`: JUnit XML (`junit/TEST-*.xml`) and HTML matrix (`verify.html`) from the verify phase
 
 ## Testing
 
@@ -148,6 +157,7 @@ groovy run-all-tests.groovy
 groovy test-templates.groovy   # Test template generation
 groovy test-discovery.groovy   # Test template discovery
 groovy test-converter.groovy   # Test format conversion
+groovy test-verifier.groovy    # Test verify phase (checks, verifier, reports)
 ```
 
 The test suite validates:

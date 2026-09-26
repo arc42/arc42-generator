@@ -65,8 +65,7 @@ verify {
         markdownStrict:   ['table', 'thead', 'tbody', 'tr', 'th', 'td', 'col', 'colgroup'],
         markdownMPStrict: ['table', 'thead', 'tbody', 'tr', 'th', 'td', 'col', 'colgroup'],
     ]
-    // rule id -> 'error' | 'warn' | 'off'; overrides the built-in default severity
-    severity = [
-        // 'md.rawHtml': 'warn',
-    ]
+    // rule id -> 'error' | 'warn' | 'off'; overrides the built-in default severity,
+    // e.g. severity = ['md.rawHtml': 'warn']
+    severity = [:]
 }

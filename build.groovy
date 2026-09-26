@@ -11,12 +11,14 @@
  * 3. Discover generated templates (Discovery.groovy)
  * 4. Convert templates to all formats (Converter.groovy)
  * 5. Create ZIP distributions (Packager.groovy)
+ * 6. Verify distributions and write JUnit/HTML reports (Verifier.groovy, Checks.groovy, Report.groovy)
  *
  * Usage:
  *   groovy build.groovy                         # Full build (all steps)
  *   groovy build.groovy templates               # Only generate templates
  *   groovy build.groovy convert                 # Only convert (assumes templates exist)
  *   groovy build.groovy distribution            # Only create distributions
+ *   groovy build.groovy verify                  # Only verify existing distribution ZIPs
  *   groovy build.groovy convert --format=html   # Convert to specific format only
  *   groovy build.groovy --parallel=false        # Disable parallel execution
  *   groovy build.groovy --config=path/to/config.groovy   # Build another template (e.g. req42)
@@ -110,6 +112,9 @@ def templatesClass
 def discoveryClass
 def converterClass
 def packagerClass
+def checksClass
+def verifierClass
+def reportClass
 
 try {
     templatesClass = gcl.parseClass(new File('lib/Templates.groovy'))
@@ -123,6 +128,15 @@ try {
 
     packagerClass = gcl.parseClass(new File('lib/Packager.groovy'))
     println "✓ Loaded Packager.groovy"
+
+    checksClass = gcl.parseClass(new File('lib/Checks.groovy'))
+    println "✓ Loaded Checks.groovy"
+
+    verifierClass = gcl.parseClass(new File('lib/Verifier.groovy'))
+    println "✓ Loaded Verifier.groovy"
+
+    reportClass = gcl.parseClass(new File('lib/Report.groovy'))
+    println "✓ Loaded Report.groovy"
     println ""
 } catch (Exception e) {
     println "✗ Failed to load helper classes: ${e.message}"
@@ -135,6 +149,9 @@ def templates = templatesClass.newInstance(config, projectRoot)
 def discovery = discoveryClass.newInstance(config, projectRoot)
 def converter = converterClass.newInstance(config, projectRoot)
 def packager = packagerClass.newInstance(config, projectRoot)
+def checks = checksClass.newInstance(config)
+def verifier = verifierClass.newInstance(config, projectRoot, checks)
+def report = reportClass.newInstance(config, projectRoot)
 
 // ============================================================================
 // Phase 1: Generate Templates from Golden Master
@@ -216,17 +233,55 @@ if (targetPhase in ['all', 'distribution']) {
 }
 
 // ============================================================================
+// Phase 5: Verify Distribution ZIPs
+// ============================================================================
+
+def verificationFailed = false
+
+if (targetPhase in ['all', 'verify']) {
+    try {
+        println "=== Verifying Distributions ==="
+        def formatsToVerify = targetFormat ? [targetFormat] : (config.formats.keySet() as List)
+        def suites = verifier.verifyAll(formatsToVerify)
+
+        def gitShort = { File dir ->
+            try {
+                def p = ['git', '-C', dir.absolutePath, 'rev-parse', '--short', 'HEAD'].execute()
+                p.waitFor()
+                return p.exitValue() == 0 ? p.text.trim() : null
+            } catch (Exception e) { return null }
+        }
+        report.writeAll(suites, [project: config.project.name, date: new Date().format('yyyy-MM-dd HH:mm'),
+                                 generatorCommit: gitShort(projectRoot),
+                                 goldenMasterCommit: gitShort(new File(projectRoot, config.goldenMaster.sourcePath.toString()))])
+        verificationFailed = report.hasFailures(suites)
+    } catch (Exception e) {
+        println "\n✗ Verification failed to run: ${e.message}"
+        e.printStackTrace()
+        System.exit(1)
+    }
+}
+
+// ============================================================================
 // Summary
 // ============================================================================
 
 def endTime = System.currentTimeMillis()
 def duration = (endTime - startTime) / 1000.0
 
-println """
+if (verificationFailed) {
+    println """
+╔═══════════════════════════════════════════════════════════════════════════╗
+║               BUILD FAILED: verification reported failures                ║
+╚═══════════════════════════════════════════════════════════════════════════╝
+"""
+} else {
+    println """
 ╔═══════════════════════════════════════════════════════════════════════════╗
 ║                            BUILD SUCCESSFUL                               ║
 ╚═══════════════════════════════════════════════════════════════════════════╝
 """
+}
 
 println "Duration: ${String.format('%.1f', duration)}s"
 
@@ -247,3 +302,7 @@ Summary:
 
 println "Build completed: ${new Date()}"
 println ""
+
+if (verificationFailed) {
+    System.exit(1)
+}

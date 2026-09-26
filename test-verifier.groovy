@@ -615,6 +615,45 @@ section('writeAll writes into reportDir and returns both files') {
     assert new File(fixtureRoot, 'reports-all/verify.html').exists()
 }
 
+// ---- Task 11: smoke test on the real dist, when present -------------------------
+
+section('real dist: EN with-help markdown currently fails md.pandocSyntax') {
+    def realZip = new File('arc42-template/dist/arc42-template-EN-withhelp-markdown.zip')
+    if (!realZip.exists()) { println "  (skipped, ${realZip} not present)"; return }
+    def cfg = new ConfigSlurper().parse(new File('buildconfig.groovy').toURI().toURL())
+    def checks = checksClass.newInstance(cfg)
+    def v = verifierClass.newInstance(cfg, new File('.'), checks)
+    def result = v.verifyCase('EN', 'with-help', 'markdown')
+    assert result.revnumber == '9.0-EN'
+    // Known generator defect documented in the spec; invert this assertion once the generator emits CommonMark.
+    expectRules(result.findings, ['md.pandocSyntax', 'md.emptyHeading'])
+    noRule(result.findings, 'structure.chapters')
+    noRule(result.findings, 'structure.revnumber')
+    noRule(result.findings, 'structure.helpText')
+}
+
+section('severity and allowedHtml tolerate an empty list literal in the config') {
+    // `severity = [ ]` with only comments inside is a List in Groovy, not a Map
+    def cfg = baseConfig(); cfg.verify.severity = []; cfg.verify.allowedHtml = []
+    def checks = checksClass.newInstance(cfg)
+    assert checks.severityOf('md.rawHtml') == 'error'
+    assert checks.finding('md.rawHtml', 'x') != null
+    def md = '# Chapter One\n\n<table><tr><td>a</td></tr></table>\n\n# Chapter Two\n'
+    expectRules(checks.checkMarkdown(ctxOf([format: 'markdownStrict', entries: bytesOf(['x.md': md])])), ['md.rawHtml'])
+}
+
+section('structure: entities and typographic quotes are folded before matching') {
+    def checks = checksClass.newInstance(baseConfig())
+    // Textile output escapes the hyphen as a numeric entity
+    def textile = 'h1. One\n\nTemplate Version 9.0&#45;EN. HELP SENTINEL SENTENCE FOR TESTS\n\nh1. Two\n'
+    noRule(checks.checkStructure(ctxOf([format: 'textile', revnumber: '9.0-EN', entries: bytesOf(['x.textile': textile])])), 'structure.revnumber')
+    // Asciidoctor and pandoc turn the ASCII apostrophe into a typographic one (U+2019 or &#8217;)
+    def md = '# One\n\nL’équipe de développement doit prendre en compte 1.0-EN\n\n# Two\n'
+    noRule(checks.checkStructure(ctxOf([helpSentinel: "L'équipe de développement doit prendre en compte", entries: bytesOf(['x.md': md])])), 'structure.helpText')
+    def html = '<html><head><title>T</title></head><body><h2>One</h2><p>L&#8217;équipe de développement doit prendre en compte 1.0-EN</p><h2>Two</h2></body></html>'
+    noRule(checks.checkStructure(ctxOf([format: 'html', helpSentinel: "L'équipe de développement doit prendre en compte", entries: bytesOf(['x.html': html])])), 'structure.helpText')
+}
+
 // ---- summary ----------------------------------------------------------------
 
 println failures ? "✗ ${failures.size()} section(s) failed: ${failures}" : "=== All Tests Passed! ==="
