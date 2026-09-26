@@ -44,8 +44,8 @@ The build will:
 * Update the arc42-template submodule (Golden Master)
 * Generate templates in all supported languages and flavors
 * Convert to 15+ output formats (HTML, Markdown, DOCX, PDF, etc.)
-* Validate CommonMark markdown and image references
 * Create distribution ZIP files in `arc42-template/dist/`
+* Verify every ZIP and write a JUnit and HTML report to `build/reports/` (see <<verify,Verifying the Output>>)
 
 Results are written to the local `build/` directory.
 
@@ -78,6 +78,7 @@ docker compose run --rm arc42-builder /bin/bash
 groovy build.groovy templates      # Generate templates only
 groovy build.groovy convert        # Convert to output formats
 groovy build.groovy distribution   # Create distribution ZIPs
+groovy build.groovy verify         # Verify the ZIPs, write reports (exit 1 on failures)
 ----
 
 === Building Other Templates (e.g. req42)
@@ -99,21 +100,88 @@ docker compose run --rm -v /path/to/req42-framework:/project arc42-builder \
   groovy build.groovy --config=/project/buildconfig.groovy
 ----
 
-=== Build Validation
+[[verify]]
+=== Verifying the Output
 
-The fifth build phase `verify` inspects every distribution ZIP and the Golden Master:
+The fifth build phase `verify` inspects every distribution ZIP in `arc42-template/dist/` and the
+Golden Master itself. It runs automatically at the end of `docker compose up`. To run only the
+verification, for example against the ZIPs that are already committed:
 
-* **Completeness**: every language × style × format ZIP exists and contains the expected files
-* **Structure**: twelve chapters, help text present only in with-help, template version present
-* **Markdown purity**: no pandoc-only syntax, no raw HTML, valid CommonMark, images resolve
-* **HTML, DOCX, EPUB**: well-formed packages, images embedded or referenced correctly
-* **Source**: version.properties, includes and image references of each language
+----
+# all formats, all languages (about 5 seconds)
+docker compose run --rm arc42-builder groovy build.groovy verify
 
-Results are written to `build/reports/junit/TEST-*.xml` (JUnit XML, usable in any CI) and
-`build/reports/verify.html` (matrix of languages × formats with the template version per language).
-A failing check makes `groovy build.groovy` exit with code 1. Run `groovy build.groovy verify`
-to check the committed ZIPs without rebuilding. Rule severities can be adjusted in the
-`verify` block of `buildconfig.groovy`.
+# one format only
+docker compose run --rm arc42-builder groovy build.groovy verify --format=html
+
+# another template project (see "Building Other Templates")
+docker compose run --rm -v /path/to/req42-framework:/project arc42-builder \
+  groovy build.groovy verify --config=/project/buildconfig.groovy
+----
+
+The console prints one line per format with pass/warn/fail counts, then every failed test case
+with its rule ids, then the report paths. The exit code is 1 if any test case failed, so the
+verification also gates CI.
+
+==== Reading the reports
+
+* `build/reports/verify.html` - open it in a browser. The header names the generator and Golden
+  Master commits. The matrix has one row per language with its template version (`revnumber` and
+  `revdate` from `version.properties`) and one column per format plus `source`; each cell shows
+  the `plain` and `with-help` result as a coloured mark (green pass, yellow warn, red fail,
+  grey missing). Below the matrix every finding is listed once per rule id with the affected
+  outputs and up to three examples with file name and line number. Errors are expanded, warnings
+  collapsed.
+* `build/reports/junit/TEST-<format>.xml` - one Surefire-style JUnit file per format plus
+  `TEST-source.xml`. Test case names carry the version, e.g. `EN-with-help [9.0-EN]`. Any CI
+  server that understands JUnit XML (GitHub Actions, GitLab, Jenkins) can display them.
+* A run with `--format=<f>` writes `verify-<f>.html` next to `verify.html` and updates only
+  `TEST-<f>.xml` and `TEST-source.xml`, so the last full matrix stays intact.
+
+==== What is checked
+
+* **Completeness** (`zip.*`): every language × style × format ZIP exists, is non-empty, contains
+  the primary file (twelve chapter files for multi-page formats) and, for with-help, the images
+* **Structure** (`structure.*`): twelve chapters, heading counts compared with the reference
+  language (warning only), help text present only in with-help, template version present in the text
+* **Markdown purity** (`md.*`): no pandoc-only syntax (`:::` divs, `{#id}` attributes), no raw
+  HTML beyond the per-format allow list, no empty heading, images resolve, parses as CommonMark
+* **HTML** (`html.*`): one `<html>` and `<body>`, non-empty `<title>`, UTF-8 charset, images
+  resolve, local `#anchors` have a target (warning)
+* **DOCX and EPUB** (`docx.*`, `epub.*`): the package opens, its XML parses, manifest items and
+  media are present
+* **Source** (`src.*`): `version.properties` complete, main document present, twelve chapter
+  files, every `include::` and `image::` target exists
+
+Every finding names its rule id, e.g. `md.rawHtml`. The full list with default severities is the
+`DEFAULT_SEVERITY` map at the top of `lib/Checks.groovy`.
+
+==== Adjusting severities
+
+Rule severities live in the `verify` block of `buildconfig.groovy`. To downgrade a rule to a
+warning while the generator is being fixed, or to switch it off:
+
+----
+verify {
+    severity = ['md.rawHtml': 'warn', 'md.frontMatter': 'off']
+}
+----
+
+The same block sets the reference language (`EN`), the chapter count (12), the report directory
+(`build/reports`) and the HTML tags tolerated per Markdown format (`allowedHtml`).
+
+==== Known state
+
+The verification is intentionally red on the current Golden Master: the Markdown formats still
+contain pandoc-only syntax and raw HTML, the multi-page with-help ZIPs lose their help text, and
+several languages reference images that only exist in `EN/images`. These are generator and
+content defects tracked separately; the verifier documents them until they are fixed.
+
+Verifying the verifier itself:
+
+----
+docker compose run --rm arc42-builder groovy test-verifier.groovy
+----
 
 
 === Docker Image Details
