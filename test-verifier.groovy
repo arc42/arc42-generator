@@ -526,6 +526,55 @@ section('verifyAll puts the source suite first') {
     assert v.verifyAll(['markdown'])*.name == ['source', 'markdown']
 }
 
+// ---- Task 9: JUnit XML ---------------------------------------------------------
+
+def SAMPLE_SUITES = [
+    [name: 'source', cases: [[language: 'EN', style: '-', format: 'source', revnumber: '1.0-EN', revdate: '2026', durationMs: 5L, findings: [], status: 'pass']]],
+    [name: 'markdown', cases: [
+        [language: 'EN', style: 'with-help', format: 'markdown', revnumber: '1.0-EN', revdate: '2026', durationMs: 12L, findings: [], status: 'pass'],
+        [language: 'EN', style: 'plain', format: 'markdown', revnumber: '1.0-EN', revdate: '2026', durationMs: 7L,
+         findings: [[ruleId: 'md.rawHtml', severity: 'error', message: '2 raw HTML tag(s) not allowed: div', examples: [[location: 'x.md:3', text: '<div class="a">'], [location: 'x.md:9', text: '</div>']]],
+                    [ruleId: 'md.frontMatter', severity: 'warn', message: 'front matter title contains an image', examples: [[location: 'x.md:1', text: 'title: "![l](i.png)"']]]],
+         status: 'fail'],
+        [language: 'DE', style: 'plain', format: 'markdown', revnumber: '0.9-DE', revdate: '2025', durationMs: 7L,
+         findings: [[ruleId: 'structure.referenceCounts', severity: 'warn', message: 'heading counts differ from reference: level 2: 3 vs 1', examples: []]], status: 'warn'],
+    ]],
+]
+
+section('junit: one file per suite with Surefire structure') {
+    def cfg = baseConfig()
+    def report = reportClass.newInstance(cfg, fixtureRoot)
+    def dir = new File(fixtureRoot, 'reports/junit')
+    def files = report.writeJUnit(SAMPLE_SUITES, dir)
+    assert files*.name == ['TEST-source.xml', 'TEST-markdown.xml']
+
+    def suite = new groovy.xml.XmlSlurper().parse(new File(dir, 'TEST-markdown.xml'))
+    assert suite.name() == 'testsuite'
+    assert suite.@name == 'markdown' && suite.@tests == '3' && suite.@failures == '1' && suite.@errors == '0' && suite.@skipped == '0'
+    assert suite.properties.property.find { it.@name == 'revnumber.EN' }.@value == '1.0-EN'
+    assert suite.properties.property.find { it.@name == 'revnumber.DE' }.@value == '0.9-DE'
+
+    def cases = suite.testcase
+    assert cases.collect { it.@name.text() } == ['EN-with-help [1.0-EN]', 'EN-plain [1.0-EN]', 'DE-plain [0.9-DE]']
+    assert cases[0].@classname == 'demo.verify.markdown'
+    assert cases[1].failure.size() == 1
+    assert cases[1].failure.@message.text() == 'md.rawHtml (2)'
+    assert cases[1].failure.text().contains('x.md:3') && cases[1].failure.text().contains('<div class="a">')
+    assert cases[1]['system-out'].text().contains('md.frontMatter'), "warnings go to system-out"
+    assert cases[1].properties.property.find { it.@name == 'revnumber' }.@value == '1.0-EN'
+    assert cases[2].failure.size() == 0 && cases[2]['system-out'].text().contains('structure.referenceCounts')
+    assert cases[0].@time.text() == '0.012'
+}
+
+section('junit: skipped status is rendered') {
+    def report = reportClass.newInstance(baseConfig(), fixtureRoot)
+    def suites = [[name: 'x', cases: [[language: 'EN', style: 'plain', format: 'x', revnumber: null, revdate: null, durationMs: 0L, findings: [], status: 'skipped']]]]
+    report.writeJUnit(suites, new File(fixtureRoot, 'reports/junit2'))
+    def suite = new groovy.xml.XmlSlurper().parse(new File(fixtureRoot, 'reports/junit2/TEST-x.xml'))
+    assert suite.@skipped == '1' && suite.testcase[0].skipped.size() == 1
+    assert suite.testcase[0].@name == 'EN-plain', "no revnumber, no bracket"
+}
+
 // ---- summary ----------------------------------------------------------------
 
 println failures ? "✗ ${failures.size()} section(s) failed: ${failures}" : "=== All Tests Passed! ==="
