@@ -73,7 +73,16 @@ class Verifier {
         def key = "${style}/${format}".toString()
         if (!referenceCache.containsKey(key)) {
             def zip = zipFile(referenceLanguage, style, format)
-            referenceCache[key] = zip.exists() ? checks.headingCounts(baseContext(referenceLanguage, style, format, checks.unzip(zip.bytes))) : null
+            Map counts = null
+            if (zip.exists()) {
+                // a corrupt or empty reference ZIP is reported by its own case; it must not abort the phase
+                // or make every other language warn against zero headings
+                try {
+                    def entries = checks.unzip(zip.bytes)
+                    counts = entries ? checks.headingCounts(baseContext(referenceLanguage, style, format, entries)) : null
+                } catch (Exception e) { counts = null }
+            }
+            referenceCache[key] = counts
         }
         return referenceCache[key]
     }

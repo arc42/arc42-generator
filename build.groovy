@@ -252,6 +252,7 @@ if (targetPhase in ['all', 'verify']) {
             } catch (Exception e) { return null }
         }
         report.writeAll(suites, [project: config.project.name, date: new Date().format('yyyy-MM-dd HH:mm'),
+                                 formatFilter: targetFormat,
                                  generatorCommit: gitShort(projectRoot),
                                  goldenMasterCommit: gitShort(new File(projectRoot, config.goldenMaster.sourcePath.toString()))])
         verificationFailed = report.hasFailures(suites)

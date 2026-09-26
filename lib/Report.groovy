@@ -85,7 +85,7 @@ class Report {
                         if (c.status == 'skipped') {
                             skipped()
                         } else if (errors) {
-                            failure(message: errors.collect { "${it.ruleId} (${it.message.find(/\d+/) ?: '1'})" }.join(', '), describe(errors))
+                            failure(message: errors.collect { "${it.ruleId} (${it.count ?: (it.examples ? it.examples.size() : 1)})" }.join(', '), describe(errors))
                         }
                         if (warns) {
                             'system-out'(describe(warns))
@@ -187,10 +187,16 @@ class Report {
         println ""
     }
 
-    /** Write both reports under reportDir() and print the summary */
+    /**
+     * Write both reports under reportDir() and print the summary.
+     * A full run (no meta.formatFilter) first removes stale TEST-*.xml files so CI never ingests a mix;
+     * a filtered run (--format=) keeps the other suites and writes verify-<format>.html next to verify.html.
+     */
     List<File> writeAll(List suites, Map meta) {
         def junitDir = new File(reportDir(), 'junit')
-        def htmlFile = new File(reportDir(), 'verify.html')
+        def filter = meta.formatFilter
+        def htmlFile = new File(reportDir(), filter ? "verify-${filter}.html" : 'verify.html')
+        if (!filter) junitDir.listFiles()?.findAll { it.name ==~ /TEST-.*\.xml/ }*.delete()
         def files = writeJUnit(suites, junitDir)
         files << writeHtml(suites, htmlFile, meta)
         printSummary(suites, junitDir, htmlFile)

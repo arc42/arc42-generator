@@ -4,6 +4,7 @@
 @Grab('org.jsoup:jsoup:1.18.3')
 
 import org.commonmark.parser.Parser
+import org.commonmark.parser.IncludeSourceSpans
 import org.commonmark.node.*
 import org.jsoup.Jsoup
 import java.util.regex.Pattern
@@ -58,11 +59,15 @@ class Checks {
         return DEFAULT_SEVERITY[ruleId] ?: 'error'
     }
 
-    /** Build a finding, or null when the rule is switched off. Examples are capped at three. */
-    Map finding(String ruleId, String message, List examples = []) {
+    /**
+     * Build a finding, or null when the rule is switched off. Examples are capped at three;
+     * count is the number of occurrences (defaults to the number of examples before capping).
+     */
+    Map finding(String ruleId, String message, List examples = [], Integer count = null) {
         def severity = severityOf(ruleId)
         if (severity == 'off') return null
-        return [ruleId: ruleId, severity: severity, message: message, examples: examples.take(3)]
+        return [ruleId: ruleId, severity: severity, message: message, examples: examples.take(3),
+                count: count ?: (examples ? examples.size() : 1)]
     }
 
     /** Collapse all whitespace (including NBSP) to single spaces and trim. */
@@ -99,7 +104,6 @@ class Checks {
     static final Pattern MD_EMPTY_HEADING = ~/^#{1,6}[ \t]*$/
     static final Pattern MD_HEADING_ATTR = ~/^#{1,6}\s.*\{[#.][^}]*\}\s*$/
     static final Pattern MD_FENCED_DIV = ~/^:{3,}(\s.*)?$/
-    static final Pattern MD_IMAGE = ~/!\[[^\]]*\]\(\s*<?([^)\s>]+)>?(?:\s+"[^"]*")?\s*\)/
 
     /** Entries of this format's extension, decoded as UTF-8, keyed by entry name, sorted. */
     Map<String, String> textEntries(Map ctx) {
@@ -186,28 +190,31 @@ class Checks {
                         rawTagNames << tag
                     }
                 }
-                def im = MD_IMAGE.matcher(line)
-                while (im.find()) {
-                    def ref = im.group(1)
-                    if (isRemote(ref)) continue
-                    def resolved = resolvePath(name, ref)
-                    if (!ctx.entries.containsKey(resolved)) {
-                        missingImages << [location: "${name}:${l.no}".toString(), text: "${ref} -> ${resolved}".toString()]
-                    }
-                }
             }
 
-            // parser-backed HTML detection
+            // parser-backed detection: HTML nodes and image references (pandoc wraps image links across
+            // lines, so images are taken from the AST rather than from single lines); source spans give line numbers
             try {
-                def doc = Parser.builder().build().parse(text)
+                def doc = Parser.builder().includeSourceSpans(IncludeSourceSpans.BLOCKS_AND_INLINES).build().parse(text)
+                def locOf = { Node n -> def spans = n.sourceSpans; spans ? "${name}:${spans[0].lineIndex + 1}".toString() : name }
                 def visitor = new AbstractVisitor() {
-                    void visit(HtmlBlock block) { report(block.literal); visitChildren(block) }
-                    void visit(HtmlInline inline) { report(inline.literal); visitChildren(inline) }
-                    void report(String literal) {
+                    void visit(HtmlBlock block) { report(block.literal, locOf(block)); visitChildren(block) }
+                    void visit(HtmlInline inline) { report(inline.literal, locOf(inline)); visitChildren(inline) }
+                    void visit(Image image) {
+                        def ref = image.destination ?: ''
+                        if (ref && !isRemote(ref)) {
+                            def resolved = resolvePath(name, ref)
+                            if (!ctx.entries.containsKey(resolved)) {
+                                missingImages << [location: locOf(image), text: "${ref} -> ${resolved}".toString()]
+                            }
+                        }
+                        visitChildren(image)
+                    }
+                    void report(String literal, String location) {
                         def m = HTML_TAG.matcher(literal ?: '')
                         while (m.find()) {
                             def tag = m.group(1).toLowerCase()
-                            if (tag in HTML_TAGS && !(tag in allowed)) commonmarkHtml << [location: name, text: m.group(0)]
+                            if (tag in HTML_TAGS && !(tag in allowed)) commonmarkHtml << [location: location, text: m.group(0)]
                         }
                     }
                 }

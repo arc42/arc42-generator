@@ -654,6 +654,63 @@ section('structure: entities and typographic quotes are folded before matching')
     noRule(checks.checkStructure(ctxOf([format: 'html', helpSentinel: "L'équipe de développement doit prendre en compte", entries: bytesOf(['x.html': html])])), 'structure.helpText')
 }
 
+// ---- Final review fixes -----------------------------------------------------------
+
+section('markdown: image links wrapped across lines are checked, with line numbers') {
+    def checks = checksClass.newInstance(baseConfig())
+    // pandoc wraps long alt texts at 72 columns
+    def md = '# Chapter One\n\n![Categories of quality\nrequirements](images/missing.png)\n\n<div class="x">\n</div>\n\n# Chapter Two\n'
+    def findings = checks.checkMarkdown(ctxOf([entries: bytesOf(['x.md': md])]))
+    def img = findings.find { it.ruleId == 'md.images' }
+    assert img != null && img.examples[0].location == 'x.md:3', "wrapped image must be found: ${img}"
+    def cm = findings.find { it.ruleId == 'md.commonmark' }
+    assert cm != null && cm.examples[0].location == 'x.md:6', "commonmark findings carry a line number: ${cm?.examples}"
+    // images inside code fences are not references
+    noRule(checks.checkMarkdown(ctxOf([entries: bytesOf(['x.md': '# One\n\n```\n![a](images/nope.png)\n```\n\n# Two\n'])])), 'md.images')
+}
+
+section('findings carry an explicit count used by the JUnit failure message') {
+    def checks = checksClass.newInstance(baseConfig())
+    assert checks.finding('md.rawHtml', 'msg', [[location: 'a:1', text: 'x']] * 5, 5).count == 5
+    def md = '# One\n\n<div>\n<div>\n<div>\n<div>\n\n# Two\n'
+    assert checks.checkMarkdown(ctxOf([entries: bytesOf(['x.md': md])])).find { it.ruleId == 'md.rawHtml' }.count == 4
+    def report = reportClass.newInstance(baseConfig(), fixtureRoot)
+    def suites = [[name: 'x', cases: [[language: 'EN', style: 'plain', format: 'x', revnumber: '9.0-EN', revdate: null, durationMs: 1L, status: 'fail',
+        findings: [[ruleId: 'structure.revnumber', severity: 'error', message: "revnumber '9.0-EN' not found in output", examples: [[location: 'x', text: '9.0-EN']]],
+                   [ruleId: 'md.rawHtml', severity: 'error', message: '40 raw HTML tag(s) not allowed: em, p', count: 40, examples: [[location: 'x:1', text: '<em>']]]]]]]]
+    report.writeJUnit(suites, new File(fixtureRoot, 'reports/junit3'))
+    def suite = new groovy.xml.XmlSlurper().parse(new File(fixtureRoot, 'reports/junit3/TEST-x.xml'))
+    assert suite.testcase[0].failure.@message.text() == 'structure.revnumber (1), md.rawHtml (40)', suite.testcase[0].failure.@message.text()
+}
+
+section('writeAll: full runs clear stale suite files, filtered runs write a separate html file') {
+    def cfg = baseConfig([reportDir: 'reports-stale'])
+    def report = reportClass.newInstance(cfg, fixtureRoot)
+    def junit = new File(fixtureRoot, 'reports-stale/junit'); junit.mkdirs()
+    new File(junit, 'TEST-old.xml').text = '<testsuite/>'
+    report.writeAll(SAMPLE_SUITES, [project: 'p', date: 'd'])
+    assert !new File(junit, 'TEST-old.xml').exists(), "stale suite removed on a full run"
+    assert new File(fixtureRoot, 'reports-stale/verify.html').exists()
+
+    def files = report.writeAll([SAMPLE_SUITES[0]], [project: 'p', date: 'd', formatFilter: 'html'])
+    assert new File(junit, 'TEST-markdown.xml').exists(), "filtered run keeps other suites"
+    assert files*.name.contains('verify-html.html') && new File(fixtureRoot, 'reports-stale/verify-html.html').exists()
+    assert new File(fixtureRoot, 'reports-stale/verify.html').getText('UTF-8').contains('<th>markdown</th>'), "full matrix untouched by filtered run"
+}
+
+section('verifier: corrupt reference zip does not abort, referenceCounts is null') {
+    def cfg = makeFixture(['demo-template-DE-withhelp-markdown.zip': GOOD_ZIP])
+    def ref = new File(fixtureRoot, 'dist/demo-template-EN-withhelp-markdown.zip')
+    ref.bytes = 'not a zip'.bytes
+    def v = verifierClass.newInstance(cfg, fixtureRoot, checksClass.newInstance(cfg))
+    assert v.buildContext('DE', 'with-help', 'markdown').referenceCounts == null, "garbage reference yields no reference, not an empty map"
+    def whole = zipBytes(GOOD_ZIP)
+    ref.bytes = whole[0..(whole.length.intdiv(2))] as byte[]
+    def v2 = verifierClass.newInstance(cfg, fixtureRoot, checksClass.newInstance(cfg))
+    def result = v2.verifyCase('DE', 'with-help', 'markdown')   // truncated reference must not throw
+    assert result.status in ['pass', 'warn'], result.findings*.message.toString()
+}
+
 // ---- summary ----------------------------------------------------------------
 
 println failures ? "✗ ${failures.size()} section(s) failed: ${failures}" : "=== All Tests Passed! ==="
