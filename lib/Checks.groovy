@@ -502,9 +502,9 @@ class Checks {
         if (ctx.entries == null || ctx.entries.isEmpty() || findings.any { it.ruleId == 'zip.primaryFile' }) return findings
         findings.addAll(checkStructure(ctx))
         if (ctx.format in MD_FORMATS) findings.addAll(checkMarkdown(ctx))
-        if (ctx.format == 'html' && respondsTo('checkHtml')) findings.addAll(checkHtml(ctx))
-        if (ctx.format == 'docx' && respondsTo('checkDocx')) findings.addAll(checkDocx(ctx))
-        if (ctx.format == 'epub' && respondsTo('checkEpub')) findings.addAll(checkEpub(ctx))
+        if (ctx.format == 'html') findings.addAll(checkHtml(ctx))
+        if (ctx.format == 'docx') findings.addAll(checkDocx(ctx))
+        if (ctx.format == 'epub') findings.addAll(checkEpub(ctx))
         return findings
     }
 
@@ -541,6 +541,70 @@ class Checks {
             }
             if (broken) findings << finding('html.localLinks', "${name}: ${broken.size()} local link(s) without target", broken)
         }
+        return findings.findAll { it != null }
+    }
+
+    // ---- DOCX -------------------------------------------------------------------
+
+    private boolean parsesAsXml(byte[] bytes) {
+        try {
+            def parser = new groovy.xml.XmlSlurper(false, false)
+            parser.parse(new ByteArrayInputStream(bytes))
+            return true
+        } catch (Exception e) {
+            return false
+        }
+    }
+
+    List<Map> checkDocx(Map ctx) {
+        def findings = []
+        def pkg = innerZip(ctx)
+        def docName = primaryFiles(ctx)[0] ?: 'docx'
+        if (pkg == null || pkg['word/document.xml'] == null || !parsesAsXml(pkg['word/document.xml'])) {
+            findings << finding('docx.valid', "${docName}: not a readable DOCX package (word/document.xml missing or not XML)", [[location: docName, text: 'word/document.xml']])
+            return findings.findAll { it != null }
+        }
+        int drawings = (new String(pkg['word/document.xml'], 'UTF-8') =~ /<w:drawing[\s>\/]/).count
+        int media = pkg.keySet().count { it.startsWith('word/media/') }
+        if (drawings != media || (ctx.style != 'plain' && media == 0)) {
+            findings << finding('docx.media', "${docName}: ${drawings} drawing(s) but ${media} media file(s)" + (ctx.style != 'plain' && media == 0 ? ', with-help must embed images' : ''),
+                [[location: docName, text: "word/media/* = ${media}".toString()]])
+        }
+        return findings.findAll { it != null }
+    }
+
+    // ---- EPUB -------------------------------------------------------------------
+
+    List<Map> checkEpub(Map ctx) {
+        def findings = []
+        def pkg = innerZip(ctx)
+        def epubName = primaryFiles(ctx)[0] ?: 'epub'
+        def container = pkg?.get('META-INF/container.xml')
+        if (pkg == null || container == null || !parsesAsXml(container)) {
+            findings << finding('epub.valid', "${epubName}: META-INF/container.xml missing or not XML", [[location: epubName, text: 'META-INF/container.xml']])
+            return findings.findAll { it != null }
+        }
+        def rootMatcher = (~/full-path="([^"]+)"/).matcher(new String(container, 'UTF-8'))
+        def opfName = rootMatcher.find() ? rootMatcher.group(1) : null
+        if (!opfName || pkg[opfName] == null || !parsesAsXml(pkg[opfName])) {
+            findings << finding('epub.valid', "${epubName}: package document ${opfName} missing or not XML", [[location: epubName, text: opfName ?: 'rootfile']])
+            return findings.findAll { it != null }
+        }
+        def opfDir = opfName.contains('/') ? opfName.substring(0, opfName.lastIndexOf('/') + 1) : ''
+        def opf = new String(pkg[opfName], 'UTF-8')
+        def missing = []
+        int images = 0
+        def im = (~/<item\s[^>]*>/).matcher(opf)
+        while (im.find()) {
+            def item = im.group()
+            def hm = (~/href="([^"]+)"/).matcher(item)
+            if (!hm.find()) continue
+            def entry = resolvePath(opfDir + 'x', hm.group(1))
+            if (pkg[entry] == null) missing << [location: opfName, text: entry]
+            if (item.contains('media-type="image/')) images++
+        }
+        if (missing) findings << finding('epub.valid', "${epubName}: ${missing.size()} manifest item(s) missing from package", missing)
+        if (ctx.style != 'plain' && images == 0) findings << finding('epub.media', "${epubName}: with-help EPUB declares no images in its manifest", [[location: opfName, text: 'manifest']])
         return findings.findAll { it != null }
     }
 }

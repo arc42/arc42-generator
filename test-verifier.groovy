@@ -354,6 +354,64 @@ section('html: missing title, charset, image, broken anchor, malformed') {
     expectRules(checks.checkHtml(ctxOf([format: 'html', entries: bytesOf(['demo-template.html': noHtmlTag])])), ['html.wellFormed'])
 }
 
+// ---- Task 6: DOCX and EPUB ----------------------------------------------------
+
+section('docx: valid package with matching media') {
+    def checks = checksClass.newInstance(baseConfig())
+    def xml = DOCX_XML([['Heading1', 'One'], ['BodyText', 'HELP SENTINEL SENTENCE FOR TESTS 1.0-EN'], ['Heading1', 'Two']])
+        .replace('</w:body>', '<w:p><w:r><w:drawing/></w:r></w:p></w:body>')
+    def docx = zipBytes(['word/document.xml': xml, 'word/media/image1.png': [1] as byte[]])
+    def ctx = ctxOf([format: 'docx', entries: ['demo-template-EN.docx': docx, 'images/l.png': [1] as byte[]]])
+    assert checks.checkAll(ctx).isEmpty(), checks.checkAll(ctx)*.message.toString()
+}
+
+section('docx: unparsable xml, media mismatch, plain needs no media') {
+    def checks = checksClass.newInstance(baseConfig())
+    def broken = zipBytes(['word/document.xml': '<w:document><unclosed>'])
+    expectRules(checks.checkDocx(ctxOf([format: 'docx', entries: ['demo-template-EN.docx': broken]])), ['docx.valid'])
+    def notAZip = ctxOf([format: 'docx', entries: ['demo-template-EN.docx': 'plain text'.bytes]])
+    expectRules(checks.checkDocx(notAZip), ['docx.valid'])
+
+    def xml = DOCX_XML([['Heading1', 'One'], ['Heading1', 'Two']]).replace('</w:body>', '<w:p><w:r><w:drawing/></w:r></w:p></w:body>')
+    def noMedia = zipBytes(['word/document.xml': xml])
+    expectRules(checks.checkDocx(ctxOf([format: 'docx', entries: ['demo-template-EN.docx': noMedia]])), ['docx.media'])
+    def plainXml = DOCX_XML([['Heading1', 'One'], ['Heading1', 'Two']])
+    noRule(checks.checkDocx(ctxOf([format: 'docx', style: 'plain', entries: ['demo-template-EN.docx': zipBytes(['word/document.xml': plainXml])]])), 'docx.media')
+}
+
+def EPUB_FILES = { Map extra ->
+    def files = [
+        'mimetype': 'application/epub+zip',
+        'META-INF/container.xml': '<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container"><rootfiles><rootfile full-path="EPUB/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>',
+        'EPUB/content.opf': '<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf" version="3.0"><manifest><item id="c1" href="text/ch001.xhtml" media-type="application/xhtml+xml"/><item id="i" href="media/f.png" media-type="image/png"/></manifest></package>',
+        'EPUB/text/ch001.xhtml': '<html><body><h1>One</h1><p>HELP SENTINEL SENTENCE FOR TESTS 1.0-EN</p><h1>Two</h1></body></html>',
+        'EPUB/media/f.png': [1] as byte[]]
+    files.putAll(extra)
+    return files
+}
+
+section('epub: valid package') {
+    def checks = checksClass.newInstance(baseConfig())
+    def ctx = ctxOf([format: 'epub', formatConfig: [imageFolder: false], entries: ['demo-template-EN.epub': zipBytes(EPUB_FILES([:]))]])
+    assert checks.checkAll(ctx).isEmpty(), checks.checkAll(ctx)*.message.toString()
+}
+
+section('epub: missing manifest item, missing container, no images in with-help') {
+    def checks = checksClass.newInstance(baseConfig())
+    def files = EPUB_FILES([:]); files.remove('EPUB/media/f.png')
+    def findings = checks.checkEpub(ctxOf([format: 'epub', entries: ['demo-template-EN.epub': zipBytes(files)]]))
+    expectRules(findings, ['epub.valid'])
+    assert findings.find { it.ruleId == 'epub.valid' }.examples[0].text.contains('media/f.png')
+
+    def noContainer = EPUB_FILES([:]); noContainer.remove('META-INF/container.xml')
+    expectRules(checks.checkEpub(ctxOf([format: 'epub', entries: ['demo-template-EN.epub': zipBytes(noContainer)]])), ['epub.valid'])
+
+    def noImages = EPUB_FILES(['EPUB/content.opf': '<?xml version="1.0"?><package xmlns="http://www.idpf.org/2007/opf"><manifest><item id="c1" href="text/ch001.xhtml" media-type="application/xhtml+xml"/></manifest></package>'])
+    noImages.remove('EPUB/media/f.png')
+    expectRules(checks.checkEpub(ctxOf([format: 'epub', entries: ['demo-template-EN.epub': zipBytes(noImages)]])), ['epub.media'])
+    noRule(checks.checkEpub(ctxOf([format: 'epub', style: 'plain', entries: ['demo-template-EN.epub': zipBytes(noImages)]])), 'epub.media')
+}
+
 // ---- summary ----------------------------------------------------------------
 
 println failures ? "✗ ${failures.size()} section(s) failed: ${failures}" : "=== All Tests Passed! ==="
