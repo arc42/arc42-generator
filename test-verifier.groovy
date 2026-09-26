@@ -575,6 +575,46 @@ section('junit: skipped status is rendered') {
     assert suite.testcase[0].@name == 'EN-plain', "no revnumber, no bracket"
 }
 
+// ---- Task 10: HTML matrix and console -------------------------------------------
+
+section('html report: matrix rows per language with version, failures grouped by rule') {
+    def report = reportClass.newInstance(baseConfig(), fixtureRoot)
+    def file = report.writeHtml(SAMPLE_SUITES, new File(fixtureRoot, 'reports/verify.html'), [project: 'demo-template', date: '2026-09-26', generatorCommit: 'abc1234', goldenMasterCommit: 'def5678'])
+    def html = file.getText('UTF-8')
+    assert html.startsWith('<!DOCTYPE html>') && !html.contains('<link ') && !html.contains('<script src'), "self-contained"
+    assert html.contains('demo-template') && html.contains('abc1234') && html.contains('def5678')
+    assert html.contains('1.0-EN') && html.contains('0.9-DE'), "versions per language row"
+    assert html.contains('<th>markdown</th>') && html.contains('<th>source</th>')
+    assert html.contains('EN-plain [1.0-EN]'), "failed case is named"
+    assert html.contains('md.rawHtml') && html.contains('&lt;div class=&quot;a&quot;&gt;'), "examples are HTML-escaped"
+    assert html.indexOf('md.rawHtml') < html.indexOf('structure.referenceCounts'), "errors before warnings"
+    assert html.count('class="cell fail"') == 1 && html.count('class="cell warn"') == 1 && html.count('class="cell pass"') == 2
+    assert html.contains('class="cell missing"'), "DE with-help markdown has no case and shows as missing"
+}
+
+section('console summary and hasFailures') {
+    def report = reportClass.newInstance(baseConfig(), fixtureRoot)
+    assert report.hasFailures(SAMPLE_SUITES)
+    assert !report.hasFailures([SAMPLE_SUITES[0]])
+    def out = new ByteArrayOutputStream()
+    def old = System.out
+    System.setOut(new PrintStream(out, true, 'UTF-8'))
+    try { report.printSummary(SAMPLE_SUITES, new File('r/junit'), new File('r/verify.html')) } finally { System.setOut(old) }
+    def text = out.toString('UTF-8')
+    assert text.contains('markdown') && text.contains('1 pass') && text.contains('1 warn') && text.contains('1 fail')
+    assert text.contains('EN-plain [1.0-EN]') && text.contains('md.rawHtml')
+    assert text.contains('r/junit') && text.contains('verify.html')
+}
+
+section('writeAll writes into reportDir and returns both files') {
+    def cfg = baseConfig([reportDir: 'reports-all'])
+    def report = reportClass.newInstance(cfg, fixtureRoot)
+    def files = report.writeAll(SAMPLE_SUITES, [project: 'demo-template', date: 'today', generatorCommit: null, goldenMasterCommit: null])
+    assert files*.name.containsAll(['TEST-source.xml', 'TEST-markdown.xml', 'verify.html'])
+    assert new File(fixtureRoot, 'reports-all/junit/TEST-markdown.xml').exists()
+    assert new File(fixtureRoot, 'reports-all/verify.html').exists()
+}
+
 // ---- summary ----------------------------------------------------------------
 
 println failures ? "✗ ${failures.size()} section(s) failed: ${failures}" : "=== All Tests Passed! ==="
