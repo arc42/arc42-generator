@@ -103,6 +103,61 @@ try {
     converter.convertAll(enTemplate, testFormats, false)
     println "✓ Test 7 passed\n"
 
+    println "=== Test 9: Multi-page with-help output keeps the help text ==="
+    def enHelp = templates.find { it.language == 'EN' && it.style == 'with-help' }
+    assert enHelp != null, "Should find EN:with-help template"
+    def mpHelpDir = converter.convertTemplate(enHelp, 'markdownMP', 'build2/test')
+    assert mpHelpDir != null, "markdownMP conversion of with-help should succeed"
+    def mpPlainDir = converter.convertTemplate(enPlain, 'markdownMP', 'build2/test')
+    assert mpPlainDir != null, "markdownMP conversion of plain should succeed"
+    def helpChapter = new File(mpHelpDir, '01_introduction_and_goals.md')
+    def plainChapter = new File(mpPlainDir, '01_introduction_and_goals.md')
+    assert helpChapter.exists() && plainChapter.exists(), "chapter files should exist"
+    def helpText = helpChapter.getText('utf-8')
+    def plainText = plainChapter.getText('utf-8')
+    assert helpText.contains('Describes the relevant requirements'), "with-help chapter must contain the help text"
+    assert !plainText.contains('Describes the relevant requirements'), "plain chapter must not contain help text"
+    assert helpText.length() > plainText.length(), "with-help chapter must be longer than the plain one"
+    println "✓ Test 9 passed\n"
+
+    println "=== Test 10: cleanOutputs removes previous output including DocBook intermediates ==="
+    def stale = ['build2/test/EN/html/plain/stale.txt', 'build2/test/EN/docbook/plain/stale.txt',
+                 'build2/test/EN/docbookMP/plain/stale.txt', 'build2/test/EN/markdownMP/plain/stale.txt'].collect { new File(it) }
+    stale.each { it.parentFile.mkdirs(); it.write('stale', 'utf-8') }
+    def deleted = converter.cleanOutputs([enPlain], ['html', 'markdown', 'markdownMP'], 'build2/test')
+    assert deleted >= 4, "expected at least 4 directories to be deleted, got ${deleted}"
+    stale.each { assert !it.exists(), "${it} should have been removed" }
+    assert !new File('build2/test/EN/html/plain').exists(), "html output directory should be removed"
+    println "✓ Test 10 passed\n"
+
+    println "=== Test 11: Asciidoctor diagnostics are collected ==="
+    def diagDir = new File('build2/test/diag/src')
+    diagDir.mkdirs()
+    new File(diagDir, 'broken.adoc').write("= Broken\n\ninclude::missing.adoc[]\n", 'utf-8')
+    def brokenTemplate = [language: 'XX', style: 'plain', srcDir: diagDir.absolutePath,
+                          mainFile: new File(diagDir, 'broken.adoc').absolutePath,
+                          hasImages: false, imagesDir: null, versionProperties: [:]]
+    def before = converter.diagnostics.size()
+    converter.convertToHTML(brokenTemplate, 'build2/test/diag/html')
+    def newRecords = converter.diagnostics.drop(before)
+    assert newRecords.any { it.severity.toString() == 'ERROR' && it.message.contains('missing.adoc') },
+        "a missing include must be reported as ERROR, got: ${newRecords*.message}"
+    assert converter.diagnosticsAtOrAbove('error').size() >= 1, "diagnosticsAtOrAbove('error') should find the record"
+    assert converter.diagnosticsAtOrAbove('fatal').isEmpty(), "no FATAL diagnostics expected"
+    assert converter.diagnosticsAtOrAbove('none').isEmpty(), "'none' must select nothing"
+    println "✓ Test 11 passed\n"
+
+    println "=== Test 12: Pandoc warnings are collected as diagnostics ==="
+    new File(diagDir, 'noimage.adoc').write("= No image\n\nimage::nope.png[]\n", 'utf-8')
+    def noImageTemplate = brokenTemplate + [mainFile: new File(diagDir, 'noimage.adoc').absolutePath]
+    before = converter.diagnostics.size()
+    def noImageResult = converter.convertViaPandoc(noImageTemplate, 'docx', 'build2/test/diag/docx')
+    assert noImageResult != null && new File(noImageResult).exists(), "conversion should still produce a file"
+    newRecords = converter.diagnostics.drop(before)
+    assert newRecords.any { it.severity.toString() == 'WARN' && it.message.contains('pandoc') && it.message.contains('nope.png') },
+        "Pandoc's missing-image warning must be recorded, got: ${newRecords*.message}"
+    println "✓ Test 12 passed\n"
+
     println "=== All Tests Passed! ==="
     System.exit(0)
 

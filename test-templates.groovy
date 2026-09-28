@@ -15,6 +15,11 @@ def templatesClass = gcl.parseClass(new File('lib/Templates.groovy'))
 // Create Templates instance
 def templates = templatesClass.newInstance(config)
 
+// This script tests template generation; golden master validation has its own tests (test-lint.groovy)
+if (templates.hasProperty('failOnLintErrors')) {
+    templates.failOnLintErrors = false
+}
+
 try {
     // Test 1: Language auto-discovery
     println "=== Test 1: Language Auto-Discovery ==="

@@ -20,6 +20,11 @@
  *   groovy build.groovy convert --format=html   # Convert to specific format only
  *   groovy build.groovy --parallel=false        # Disable parallel execution
  *   groovy build.groovy --config=path/to/config.groovy   # Build another template (e.g. req42)
+ *   groovy build.groovy --failure-level=error   # Fail only on Asciidoctor/Pandoc errors (default: warn)
+ *   groovy build.groovy --lint=warn             # Report golden master problems but do not fail on them
+ *
+ * Every run starts from a clean output: the templates phase removes build/src_gen/, the convert
+ * phase removes the output directories of the formats it converts.
  */
 
 // ============================================================================
@@ -42,6 +47,10 @@ def targetPhase = 'all'
 def useParallel = true
 def targetFormat = null
 def configPath = 'buildconfig.groovy'
+// Asciidoctor/Pandoc diagnostics at this level or above fail the build: warn, error, fatal or none
+def failureLevel = 'warn'
+// Golden master validation problems fail the build unless --lint=warn is given
+def failOnLintErrors = true
 
 if (cliArgs) {
     targetPhase = cliArgs.find { !it.startsWith('--') } ?: 'all'
@@ -54,6 +63,15 @@ if (cliArgs) {
     if (configArg) {
         configPath = configArg.substring('--config='.length())
     }
+    def failureArg = cliArgs.find { it.startsWith('--failure-level=') }
+    if (failureArg) {
+        failureLevel = failureArg.substring('--failure-level='.length()).toLowerCase()
+        if (!(failureLevel in ['warn', 'error', 'fatal', 'none'])) {
+            println "✗ Unknown --failure-level '${failureLevel}', expected warn, error, fatal or none"
+            System.exit(2)
+        }
+    }
+    failOnLintErrors = !cliArgs.contains('--lint=warn')
 }
 
 println """
@@ -69,6 +87,7 @@ println "Parallel execution: ${useParallel}"
 if (targetFormat) {
     println "Target format: ${targetFormat}"
 }
+println "Failure level: ${failureLevel}"
 println ""
 
 // ============================================================================
@@ -136,12 +155,28 @@ def discovery = discoveryClass.newInstance(config, projectRoot)
 def converter = converterClass.newInstance(config, projectRoot)
 def packager = packagerClass.newInstance(config, projectRoot)
 
+if (!failOnLintErrors && templates.hasProperty('failOnLintErrors')) {
+    templates.failOnLintErrors = false
+    println "⚠ --lint=warn: golden master problems are reported but do not fail the build"
+}
+
 // ============================================================================
 // Phase 1: Generate Templates from Golden Master
 // ============================================================================
 
 if (targetPhase in ['all', 'templates']) {
     try {
+        // Start from scratch so that no file of an earlier run survives in the generated templates
+        def srcGen = new File(projectRoot, config.goldenMaster.targetPath.toString()).canonicalFile
+        if (srcGen.exists()) {
+            // the target must be a subdirectory of the project, never the project itself or something outside
+            if (!srcGen.path.startsWith(projectRoot.canonicalPath + File.separator)) {
+                throw new IllegalStateException("goldenMaster.targetPath must be a subdirectory of ${projectRoot}: ${srcGen}")
+            }
+            srcGen.deleteDir()
+            println "✓ Removed previous templates in ${config.goldenMaster.targetPath}"
+        }
+
         templates.createFromGoldenMaster()
     } catch (Exception e) {
         println "\n✗ Template generation failed: ${e.message}"
@@ -183,7 +218,23 @@ if (targetPhase in ['all', 'convert']) {
     try {
         def formatsToConvert = targetFormat ? [targetFormat] : (config.formats.keySet() as List)
 
-        converter.convertAll(discoveredTemplates, formatsToConvert, useParallel)
+        // Start from scratch so that no file of an earlier run survives in the output (and in the ZIPs)
+        converter.cleanOutputs(discoveredTemplates, formatsToConvert)
+
+        def result = converter.convertAll(discoveredTemplates, formatsToConvert, useParallel)
+
+        def failures = []
+        if (result.failed > 0) {
+            failures << "${result.failed} conversion(s) failed"
+        }
+        def diagnostics = converter.diagnosticsAtOrAbove(failureLevel)
+        if (diagnostics) {
+            failures << "${diagnostics.size()} diagnostic(s) at level ${failureLevel.toUpperCase()} or above (see 'Diagnostics' above)"
+        }
+        if (failures) {
+            println "\n✗ Conversion failed: ${failures.join('; ')}"
+            System.exit(1)
+        }
 
     } catch (Exception e) {
         println "\n✗ Conversion failed: ${e.message}"
