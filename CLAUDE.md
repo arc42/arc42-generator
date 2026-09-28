@@ -46,42 +46,49 @@ groovy build.groovy --format=html  # Build only HTML format
 - **Format filter**: `--format=html` (only convert to specified format)
 - **Parallel control**: `--parallel=false` (disable parallel execution)
 - **Config file**: `--config=path/to/config.groovy` (default `buildconfig.groovy`; paths inside are relative to that file)
+- **Failure level**: `--failure-level=warn|error|fatal|none` (default `warn`): Asciidoctor and Pandoc diagnostics at this level or above fail the build
+- **Lint**: `--lint=warn`: report golden master problems (unbalanced `ifdef`, help blocks without `ifdef`, missing images, incomplete `version.properties`) instead of failing on them
+
+Every run starts from a clean output: the `templates` phase deletes `build/src_gen/`, the `convert` phase deletes the output directories (and DocBook intermediates) of the formats it converts. Nothing from an earlier run survives into the distribution ZIPs.
+
+Output is reproducible: the HTML footer carries no build timestamp (Asciidoctor `reproducible`), and the dates inside DOCX/EPUB files and the timestamps of the ZIP entries come from `SOURCE_DATE_EPOCH` or, if unset, from the last commit of the golden master. Unchanged content produces byte-identical files and ZIPs.
 
 ## Architecture
 
 ### Build Pipeline Flow
 1. **Golden Master** (`arc42-template/` submodule) → Contains source AsciiDoc templates with feature flags
-2. **Template Generation** (`lib/Templates.groovy`) → Strips feature flags to create "plain" and "with-help" versions in `build/src_gen/`
-3. **Template Discovery** (`lib/Discovery.groovy`) → Scans generated templates and extracts metadata
-4. **Format Conversion** (`lib/Converter.groovy`) → Converts AsciiDoc to HTML, Markdown, DOCX, etc. using AsciidoctorJ and Pandoc
-5. **Distribution** (`lib/Packager.groovy`) → Packages everything into ZIP files for download
+2. **Validation** (`lib/Templates.groovy`, `validateGoldenMaster()`) → Checks the golden master (conditionals, help blocks, images, version.properties) and fails the build on errors
+3. **Template Generation** (`lib/Templates.groovy`) → Strips feature flags to create "plain" and "with-help" versions in `build/src_gen/`
+4. **Template Discovery** (`lib/Discovery.groovy`) → Scans generated templates and extracts metadata
+5. **Format Conversion** (`lib/Converter.groovy`) → Converts AsciiDoc to HTML, Markdown, DOCX, etc. using AsciidoctorJ and Pandoc; collects Asciidoctor and Pandoc diagnostics and fails the build on them
+6. **Distribution** (`lib/Packager.groovy`) → Packages everything into ZIP files for download
 
 ### Core Components
 
-#### `build.groovy` (235 lines)
-Main orchestration script that ties everything together. Supports CLI arguments for phase selection and format filtering.
+#### `build.groovy`
+Main orchestration script that ties everything together. Supports CLI arguments for phase selection, format filtering, failure level and lint mode. Cleans the output of a phase before running it and exits with code 1 on failed conversions or diagnostics at or above the failure level.
 
-#### `lib/Templates.groovy` (265 lines)
-- **Language Auto-Discovery**: Scans `arc42-template/` for language directories matching `/^[A-Z]{2}$/`
+#### `lib/Templates.groovy`
+- **Language Auto-Discovery**: Scans `arc42-template/` for language directories matching `/^[A-Z]{2,}$/`
+- **Golden Master Validation**: `validateGoldenMaster()` reports errors (unbalanced `ifdef`/`endif`, help blocks without `ifdef`, missing images, incomplete `version.properties`) and warnings (chapter set or help-block count differs from EN); errors fail `createFromGoldenMaster()` unless `failOnLintErrors` is false
 - **Feature Flag Removal**: Uses regex patterns to strip `[role="arc42help"]` blocks and `ifdef::arc42help` statements
-- **Template Generation**: Creates 18 template variants (9 languages × 2 styles)
+- **Template Generation**: Creates one template variant per language and style (12 languages × 2 styles = 24 for arc42)
 
-**Performance**: Generates templates in ~10s (vs ~30s with Gradle)
-
-#### `lib/Discovery.groovy` (220 lines)
+#### `lib/Discovery.groovy`
 - **Template Scanning**: Discovers all generated templates in `build/src_gen/`
 - **Metadata Extraction**: Reads version.properties, counts .adoc files, validates structure
 - **Query API**: Find templates by language, style, or both
 
-#### `lib/Converter.groovy` (420 lines)
+#### `lib/Converter.groovy`
 - **AsciidoctorJ Integration**: Direct HTML and DocBook conversion
 - **Pandoc Integration**: Two-step conversion (AsciiDoc → DocBook → target format)
-- **Parallel Execution**: Uses GParsPool for true parallel conversion (5-10x faster than Gradle)
+- **Multi-page formats**: one DocBook and one output file per chapter; the feature attributes of the style (e.g. `arc42help` for with-help) are set for the per-chapter conversion
+- **Diagnostics**: Asciidoctor log records and Pandoc's stderr are collected in `diagnostics`, printed after `convertAll()` (deduplicated) and evaluated by `build.groovy` against `--failure-level`
+- **Clean outputs**: `cleanOutputs()` deletes the output directories and DocBook intermediates before a conversion
+- **Parallel Execution**: Uses GParsPool for true parallel conversion
 - **Supported Formats**: html, asciidoc, docbook, markdown, docx, epub, latex, and more
 
-**Performance**: Converts 18 templates to HTML in ~6s (vs ~45s with Gradle)
-
-#### `lib/Packager.groovy` (205 lines)
+#### `lib/Packager.groovy`
 - **ZIP Creation**: Packages templates + images into distribution archives
 - **Parallel Execution**: Creates all ZIPs concurrently
 - **Output**: `arc42-template/dist/*.zip` files ready for distribution
@@ -95,9 +102,9 @@ Main orchestration script that ties everything together. Supports CLI arguments 
   - `goldenMaster`: Path to arc42-template submodule
 
 ### Supported Languages
-**Auto-discovered**: CZ, DE, EN, ES, FR, IT, NL, PT, RU (9 languages)
+**Auto-discovered**: CZ, DE, EN, ES, FR, HU, IT, NL, PT, RU, UKR, ZH (12 languages)
 
-The system automatically discovers all language directories in `arc42-template/` that match the pattern `/^[A-Z]{2}$/`. No hardcoding required.
+The system automatically discovers all language directories in `arc42-template/` that match the pattern `/^[A-Z]{2,}$/`. No hardcoding required.
 
 ### Format Conversion Strategy
 - **AsciiDoc → HTML**: Direct conversion via AsciidoctorJ
@@ -133,8 +140,9 @@ The Golden Master uses AsciiDoc role attributes to mark content (prefix set by `
   - `build-arc42.sh` auto-installs Pandoc if missing
 
 ## Output Locations
-- `build/src_gen/`: Generated AsciiDoc templates (plain, with-help variants)
-- `build/<LANG>/<FORMAT>/`: Converted templates by language and format
+- `build/src_gen/`: Generated AsciiDoc templates (plain, with-help variants); deleted at the start of the `templates` phase
+- `build/<LANG>/<FORMAT>/<STYLE>/`: Converted templates by language, format and style; deleted at the start of the `convert` phase for the formats being converted
+- `build2/`: Output of the test scripts (ignored by git)
 - `arc42-template/dist/`: Final distribution ZIP files ready for upload
 
 ## Testing
@@ -147,15 +155,18 @@ groovy run-all-tests.groovy
 # Run individual test suites
 groovy test-templates.groovy   # Test template generation
 groovy test-discovery.groovy   # Test template discovery
-groovy test-converter.groovy   # Test format conversion
+groovy test-converter.groovy   # Test format conversion, multi-page help text, clean outputs, diagnostics
+groovy test-config.groovy      # Test building a non-arc42 project from its own config file
+groovy test-lint.groovy        # Test the golden master validation on a fixture
 ```
 
 The test suite validates:
-- Language auto-discovery (finds all 9 languages)
+- Language auto-discovery
+- Golden master validation (fixture with deliberate errors)
 - Feature flag removal (regex patterns)
 - Template generation (output structure, file counts)
-- Format conversion (HTML, DocBook, Markdown, DOCX)
-- Output comparison with baseline
+- Format conversion (HTML, DocBook, Markdown, DOCX, multi-page Markdown with help text)
+- Clean outputs and collected diagnostics
 
 ## Common Development Scenarios
 
@@ -193,11 +204,16 @@ groovy build.groovy
 
 ### Debugging Conversion Issues
 ```bash
-# Run with verbose AsciidoctorJ output
-# Edit lib/Converter.groovy and set logLevel in Options to DEBUG
+# The build prints a 'Diagnostics' section after the conversion: Asciidoctor log records
+# (missing includes, unknown block styles, ...) and Pandoc warnings (e.g. images it could not find),
+# each with file and line where available. Lower the bar to see whether the build passes otherwise:
+groovy build.groovy convert --failure-level=error
+
+# Report golden master problems without failing:
+groovy build.groovy templates --lint=warn
 
 # Test single template conversion
-groovy test-converter.groovy  # Tests EN:plain template
+groovy test-converter.groovy  # Tests EN:plain and EN:with-help templates
 ```
 
 ## Git Workflow

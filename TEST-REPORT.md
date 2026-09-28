@@ -1,3 +1,7 @@
+> **Historical snapshot (October 2025).** This report documents the migration from Gradle to the standalone Groovy build.
+> Numbers (9 languages, line counts, timings, "100 % coverage") describe that point in time and are not maintained.
+> For the current test suite see the "Testing" section in `CLAUDE.md` and `run-all-tests.groovy`.
+
 # Test Report: Gradle Removal - Groovy Standalone Build System
 
 **Date:** 2025-10-30

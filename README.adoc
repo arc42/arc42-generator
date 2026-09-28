@@ -41,11 +41,15 @@ docker compose up
 +
 The build will:
 
-* Update the arc42-template submodule (Golden Master)
+* Check out the arc42-template submodule (Golden Master) at the commit recorded in this repository
+* Validate the Golden Master (conditionals, help blocks, images, version.properties) and stop on errors
 * Generate templates in all supported languages and flavors
-* Convert to 15+ output formats (HTML, Markdown, DOCX, PDF, etc.)
+* Convert to 17 output formats (HTML, Markdown variants, DOCX, EPUB, LaTeX, reStructuredText, Textile, DocBook, AsciiDoc)
+* Stop on Asciidoctor or Pandoc diagnostics (missing includes, missing images, ...)
 * Validate CommonMark markdown and image references
 * Create distribution ZIP files in `arc42-template/dist/`
+
+Every run starts from a clean `build/` output, so nothing from an earlier run ends up in the ZIPs. The output is reproducible: unchanged content produces byte-identical files and ZIPs (timestamps come from `SOURCE_DATE_EPOCH` or the last commit of the Golden Master, not from the build time).
 
 Results are written to the local `build/` directory.
 
@@ -78,7 +82,15 @@ docker compose run --rm arc42-builder /bin/bash
 groovy build.groovy templates      # Generate templates only
 groovy build.groovy convert        # Convert to output formats
 groovy build.groovy distribution   # Create distribution ZIPs
+
+# Options
+groovy build.groovy convert --format=html          # one format only
+groovy build.groovy --failure-level=error          # fail only on errors, not on warnings (default: warn)
+groovy build.groovy templates --lint=warn          # report Golden Master problems without failing
+groovy build.groovy --parallel=false               # sequential conversion
 ----
+
+To build the latest `master` of the Golden Master instead of the recorded submodule commit, run the build script with `./build-arc42.sh --update-template` (or set `UPDATE_TEMPLATE=1`).
 
 === Building Other Templates (e.g. req42)
 
@@ -101,13 +113,13 @@ docker compose run --rm -v /path/to/req42-framework:/project arc42-builder \
 
 === Build Validation
 
-The build includes automatic validation:
+The build fails on problems in the sources and in the conversion:
 
-* **CommonMark validation**: Validates generated Markdown files against GitHub-flavored Markdown spec using `cmark`
-* **Image validation**: Checks that all image references exist in with-help flavors (markdown, asciidoc, textile, rst, html)
-* **Submodule integrity**: Ensures arc42-template submodule is up-to-date
+* **Golden Master lint** (before generation): unbalanced `ifdef::arc42help[]`/`endif::arc42help[]`, help blocks that are not wrapped in a conditional, image references without a file in `<LANG>/images/`, and incomplete `version.properties` are errors; a chapter set or help-block count that differs from EN is a warning. Use `--lint=warn` to report instead of fail.
+* **Diagnostics** (after conversion): Asciidoctor log records (e.g. a missing include) and Pandoc warnings (e.g. an image it could not embed into DOCX or EPUB) are printed with file and line. Records at `--failure-level` (default `warn`) or above fail the build.
+* **Clean output**: the output directories of a phase are deleted before the phase runs.
 
-All validations are non-fatal - the build continues even if warnings are reported.
+`build-arc42.sh` additionally validates the generated Markdown with `cmark` (non-fatal, skipped when `cmark` is not installed) and the image references of the with-help Markdown (fatal).
 
 
 
@@ -124,9 +136,9 @@ The container includes:
 
 * Java Runtime (OpenJDK 21)
 * Groovy 5.0.3
-* Pandoc 3.7.0.2 (document converter)
+* Pandoc 3.7.0.2 (document converter, pinned release binary with checksum)
 * cmark (CommonMark validator)
-* AsciidoctorJ (AsciiDoc processor)
+* AsciidoctorJ 2.5.10 (AsciiDoc processor, bundles Asciidoctor 2.0.20)
 
 
 **No local installation of Java, Groovy, or Pandoc is required or supported.**
