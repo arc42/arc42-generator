@@ -1,0 +1,68 @@
+// Optional runner for the Groovy build scripts when no Groovy installation is available.
+//
+// The build logic lives in build.groovy and lib/*.groovy; the supported build path is the Docker
+// image (see README.adoc). This file only launches the same scripts with the same dependencies,
+// resolved by Gradle instead of @Grab, so that a JDK is all that is needed locally:
+//
+//   ./gradlew templates                    # groovy build.groovy templates
+//   ./gradlew convert -Popts="--format=html"
+//   ./gradlew generate                     # groovy build.groovy (all phases)
+//   ./gradlew check                        # the five test scripts (groovy run-all-tests.groovy)
+//
+// Options for build.groovy are passed with -Popts="...", e.g. -Popts="--lint=warn --failure-level=error".
+
+repositories {
+    mavenCentral()
+}
+
+configurations {
+    scripts
+}
+
+// Keep these versions in sync with the @Grab annotations in lib/*.groovy and init-groovy-deps.groovy
+dependencies {
+    scripts 'org.apache.groovy:groovy:4.0.28'
+    scripts 'org.apache.groovy:groovy-cli-picocli:4.0.28'      // groovy.ui.GroovyMain, the script launcher
+    scripts 'org.asciidoctor:asciidoctorj:2.5.10'
+    scripts('org.codehaus.gpars:gpars:1.2.1') {
+        exclude group: 'org.codehaus.groovy'                   // Groovy 2 pulled in by GPars; we bring Groovy 4
+    }
+}
+
+/** Register a task that runs a Groovy script from the project root with the dependencies above */
+def groovyScript(String taskName, String script, List<String> scriptArgs, String taskDescription) {
+    tasks.register(taskName, JavaExec) {
+        group = 'arc42'
+        description = taskDescription
+        classpath = configurations.scripts
+        mainClass = 'groovy.ui.GroovyMain'
+        workingDir = projectDir
+        // the dependencies come from this Gradle build; @Grab in the scripts must not try to resolve them again
+        systemProperty 'groovy.grape.enable', 'false'
+        systemProperty 'file.encoding', 'UTF-8'
+        def opts = project.findProperty('opts')?.toString()?.trim()
+        args = [script] + scriptArgs + (opts ? opts.split(/\s+/).toList() : [])
+        outputs.upToDateWhen { false }
+    }
+}
+
+groovyScript('templates', 'build.groovy', ['templates'], 'Phase 1: validate the golden master and generate the templates into build/src_gen/')
+groovyScript('convert', 'build.groovy', ['convert'], 'Phases 2-3: discover the templates and convert them (all formats, or -Popts="--format=html")')
+groovyScript('distribution', 'build.groovy', ['distribution'], 'Phase 4: create the distribution ZIPs')
+groovyScript('generate', 'build.groovy', [], 'All phases: templates, convert, distribution')
+
+groovyScript('testTemplates', 'test-templates.groovy', [], 'Template generation tests (generates build/src_gen/)')
+groovyScript('testDiscovery', 'test-discovery.groovy', [], 'Template discovery tests')
+groovyScript('testConverter', 'test-converter.groovy', [], 'Format conversion tests (needs Pandoc)')
+groovyScript('testConfig', 'test-config.groovy', [], 'Building a non-arc42 project from its own config file')
+groovyScript('testLint', 'test-lint.groovy', [], 'Golden master validation tests')
+
+// same order as run-all-tests.groovy: discovery and conversion need the generated templates
+tasks.named('testDiscovery') { mustRunAfter 'testTemplates' }
+tasks.named('testConverter') { mustRunAfter 'testTemplates', 'testDiscovery' }
+
+tasks.register('check') {
+    group = 'arc42'
+    description = 'Runs all test scripts'
+    dependsOn 'testTemplates', 'testDiscovery', 'testConverter', 'testConfig', 'testLint'
+}

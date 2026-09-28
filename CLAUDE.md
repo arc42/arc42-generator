@@ -37,6 +37,15 @@ groovy build.groovy distribution   # Phase 4: Create distribution ZIP files
 groovy build.groovy --format=html  # Build only HTML format
 ```
 
+### Without a Groovy Installation (Gradle Wrapper)
+```bash
+./gradlew check                                   # all test scripts (same as groovy run-all-tests.groovy)
+./gradlew templates                               # groovy build.groovy templates
+./gradlew convert -Popts="--format=html"          # options for build.groovy are passed with -Popts
+./gradlew generate                                # groovy build.groovy (all phases)
+```
+`build.gradle` only launches the Groovy scripts with the dependencies resolved by Gradle (`@Grab` is disabled there); keep its dependency versions in sync with the `@Grab` annotations in `lib/*.groovy`. Needs a JDK and Pandoc, nothing else.
+
 ### CLI Options
 - **Phase selection**: `templates`, `convert`, `distribution`, or `all` (default)
 - **Format filter**: `--format=html` (only convert to specified format)
@@ -147,6 +156,7 @@ The Golden Master uses AsciiDoc role attributes to mark content (prefix set by `
 ```bash
 # Run all integration tests
 groovy run-all-tests.groovy
+./gradlew check               # the same five scripts without a Groovy installation
 
 # Run individual test suites
 groovy test-templates.groovy   # Test template generation
