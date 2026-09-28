@@ -6,4 +6,7 @@ services:
     volumes:
       - .:/workspace
     working_dir: /workspace
+    # UPDATE_TEMPLATE=1 docker compose up  -> build the newest Golden Master instead of the recorded commit
+    environment:
+      - UPDATE_TEMPLATE
     command: ./build-arc42.sh

@@ -90,7 +90,7 @@ groovy build.groovy templates --lint=warn          # report Golden Master proble
 groovy build.groovy --parallel=false               # sequential conversion
 ----
 
-To build the latest `master` of the Golden Master instead of the recorded submodule commit, run the build script with `./build-arc42.sh --update-template` (or set `UPDATE_TEMPLATE=1`).
+To build the newest Golden Master instead of the recorded submodule commit, run `docker compose run --rm arc42-builder ./build-arc42.sh --update-template` (or `UPDATE_TEMPLATE=1 docker compose up`) and then pin the new commit in this repository with `git add arc42-template && git commit`. Local changes inside the submodule are never deleted; the build stops instead of moving the submodule over them. `./build-arc42.sh --help` lists the options and exit codes (0 success, 1 build or image validation failed, 2 invalid option).
 
 === Building Other Templates (e.g. req42)
 
@@ -119,7 +119,7 @@ The build fails on problems in the sources and in the conversion:
 * **Diagnostics** (after conversion): Asciidoctor log records (e.g. a missing include) and Pandoc warnings (e.g. an image it could not embed into DOCX or EPUB) are printed with file and line. Records at `--failure-level` (default `warn`) or above fail the build.
 * **Clean output**: the output directories of a phase are deleted before the phase runs.
 
-`build-arc42.sh` additionally validates the generated Markdown with `cmark` (non-fatal, skipped when `cmark` is not installed) and the image references of the with-help Markdown (fatal).
+`build-arc42.sh` additionally validates the generated Markdown with `cmark` (non-fatal, skipped with a notice when `cmark` is not installed) and the images of the with-help flavors: the `images/` directories of markdown, asciidoc, textile, rst and html must exist and be non-empty, and every image reference in the with-help Markdown must resolve to a file. Image findings are fatal: all of them are printed, then the script exits with 1.
 
 
 
@@ -130,7 +130,8 @@ The Docker image is optimized for size and build speed:
 * **Multi-stage build**: Separates build-time and runtime dependencies
 * **Cached dependencies**: Groovy Grape cache pre-populated during image build
 * **Minimal runtime**: Alpine Linux 3.20 with only essential tools
-* **Final image size**: ~564MB
+* **Pinned converter**: Pandoc 3.7.0.2 from the official GitHub release (static binary, SHA-256 verified), the same version `build-arc42.sh` installs outside Docker
+* **Image size**: not re-measured since the pandoc change (the static pandoc binary is about 160 MB on amd64)
 
 The container includes:
 

@@ -12,20 +12,16 @@ The actual template content lives in the `arc42-template` git submodule (the "Go
 
 ### Initial Setup
 ```bash
-# Initialize and update the arc42-template submodule
-git submodule init
-git submodule update
-cd arc42-template
-git checkout master
-git pull
-cd ..
+# Check out the arc42-template submodule at the commit recorded in this repository
+git submodule update --init --recursive
 ```
+To build the newest Golden Master instead, run `./build-arc42.sh --update-template` (or set `UPDATE_TEMPLATE=1`); it moves the submodule to the tip of `master` and tells you to pin the new commit with `git add arc42-template && git commit`. Local changes inside the submodule are never deleted.
 
 ### Full Build Process (Automated)
 ```bash
 ./build-arc42.sh
 ```
-This script handles everything: installs pandoc, updates submodules, and runs the full build pipeline.
+This script handles everything: installs pandoc 3.7.0.2 if it is missing (checksum-verified), checks out the submodule at the recorded commit (opt-in `--update-template`), runs the full build pipeline and validates the generated Markdown (`cmark`, non-fatal) and the images of the with-help flavors (fatal). `./build-arc42.sh --help` lists options and exit codes.
 
 ### Manual Build Steps
 ```bash
@@ -218,8 +214,8 @@ groovy test-converter.groovy  # Tests EN:plain and EN:with-help templates
 
 ## Git Workflow
 When updating templates:
-1. Work in the `arc42-template` submodule (commit there first)
-2. Update submodule reference in main repo: `git add arc42-template`
+1. Work in the `arc42-template` submodule (commit there first), or move it to the newest `master` with `./build-arc42.sh --update-template`
+2. Update submodule reference in main repo: `git add arc42-template` (the build is reproducible from this pinned commit)
 3. Build and test distribution files
 4. Commit distribution ZIPs in the submodule: `cd arc42-template && git commit dist/*.zip && git push`
 
