@@ -33,10 +33,11 @@ git clone --recurse-submodules git@github.com:arc42/arc42-generator.git
 cd arc42-generator
 ----
 
-2. Run the build using Docker Compose:
+2. Run the build (the `make` targets wrap Docker Compose; `make help` lists them):
 +
 ----
-docker compose up
+make build      # full build; the same as: docker compose up
+make test       # all test scripts in the container
 ----
 +
 The build will:
@@ -72,7 +73,20 @@ To rebuild the Docker image from scratch:
 docker compose build --no-cache
 ----
 
-To run individual build phases inside the container:
+Individual phases, tests and other templates through `make` (each target runs in the container; nothing but `make` and Docker is needed locally, and the output is written below the current directory):
+
+----
+make help                                   # all targets
+make templates                              # phase 1
+make convert FORMAT=html                    # phases 2-3, one format
+make generate OPTS="--lint=warn"            # all phases of build.groovy, options passed through
+make test                                   # all test scripts
+make generate TEMPLATE=../req42-framework   # another template repository, from its buildconfig.groovy
+make shell                                  # interactive shell in the container
+make clean                                  # remove build/ (the ZIPs are kept)
+----
+
+On Linux the container runs as root, so the targets hand the output back to the calling user afterwards (`make fix-owner`). The underlying commands, for running them by hand:
 
 ----
 # Start an interactive shell in the container

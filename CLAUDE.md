@@ -17,6 +17,16 @@ git submodule update --init --recursive
 ```
 To build the newest Golden Master instead, run `./build-arc42.sh --update-template` (or set `UPDATE_TEMPLATE=1`); it moves the submodule to the tip of `master` and tells you to pin the new commit with `git add arc42-template && git commit`. Local changes inside the submodule are never deleted.
 
+### In Docker Only (make + docker, nothing else installed)
+```bash
+make help                     # all targets
+make build                    # full arc42 build in the container (./build-arc42.sh)
+make test                     # all test scripts in the container
+make convert FORMAT=html      # single phase / single format; OPTS="..." passes options to build.groovy
+make generate TEMPLATE=../req42-framework   # another template repository
+```
+The Makefile only wraps `docker compose run`; output is written below the current directory (`build/`, `arc42-template/dist/`) and, on Linux, handed back to the calling user.
+
 ### Full Build Process (Automated)
 ```bash
 ./build-arc42.sh
