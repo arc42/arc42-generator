@@ -38,6 +38,11 @@ def tests = [
         name: "Custom Project Config",
         script: "test-config.groovy",
         description: "Tests building a project other than arc42 from its own config file"
+    ],
+    [
+        name: "Golden Master Lint",
+        script: "test-lint.groovy",
+        description: "Tests the golden master validation (conditionals, help blocks, images, version.properties, translation drift)"
     ]
 ]
 
