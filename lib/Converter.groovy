@@ -213,6 +213,11 @@ class Converter {
             pandocArgs.addAll(formatConfig.args)
         }
 
+        // Without an identifier Pandoc puts a random UUID into every EPUB (even with SOURCE_DATE_EPOCH)
+        if (format == 'epub') {
+            pandocArgs.addAll(['--metadata', "identifier=${epubIdentifier(template)}".toString()])
+        }
+
         // Special handling for Russian language (LaTeX)
         if (format == 'latex' && language == 'RU') {
             pandocArgs.addAll(['-V', 'fontenc=T1,T2A'])
@@ -300,6 +305,15 @@ class Converter {
                 targetFile.bytes = file.bytes
             }
         }
+    }
+
+    /**
+     * Stable EPUB identifier of a template: a name-based UUID of project, language and style,
+     * so that every template variant has its own identifier and unchanged content produces an identical EPUB.
+     */
+    String epubIdentifier(Map template) {
+        def name = "${projectName}/${template.language}/${template.style}".toString()
+        return "urn:uuid:${UUID.nameUUIDFromBytes(name.getBytes('UTF-8'))}".toString()
     }
 
     /** Returns true for formats that produce one output file per chapter */

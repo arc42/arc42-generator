@@ -165,8 +165,16 @@ try {
     Thread.sleep(1100)  // DOCX dates have a resolution of seconds
     def docxB = converter.convertViaPandoc(enPlain, 'docx', 'build2/test/EN/docx/plain')
     assert Arrays.equals(bytesA, new File(docxB).bytes), "two DOCX conversions with the same sourceDateEpoch must be byte-identical"
-    converter.sourceDateEpoch = null
     println "✓ Test 13 passed\n"
+
+    println "=== Test 14: EPUB output is reproducible (fixed identifier) ==="
+    def epubA = converter.convertViaPandoc(enPlain, 'epub', 'build2/test/EN/epub/plain')
+    def epubBytesA = new File(epubA).bytes
+    def epubB = converter.convertViaPandoc(enPlain, 'epub', 'build2/test/EN/epub/plain')
+    assert Arrays.equals(epubBytesA, new File(epubB).bytes), "two EPUB conversions with the same sourceDateEpoch must be byte-identical"
+    assert converter.epubIdentifier(enPlain) != converter.epubIdentifier(enHelp), "template variants need distinct EPUB identifiers"
+    converter.sourceDateEpoch = null
+    println "✓ Test 14 passed\n"
 
     println "=== All Tests Passed! ==="
     System.exit(0)
