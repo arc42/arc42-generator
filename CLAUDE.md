@@ -167,7 +167,7 @@ The test suite validates:
 ## Common Development Scenarios
 
 ### Adding a New Language
-1. Create language folder in `arc42-template/<LANG>/` submodule (must match `/^[A-Z]{2}$/`)
+1. Create language folder in `arc42-template/<LANG>/` submodule (must match `/^[A-Z]{2,}$/`)
 2. Add template content (AsciiDoc files)
 3. Run `groovy build.groovy` - language will be auto-discovered
 4. No code changes needed!
