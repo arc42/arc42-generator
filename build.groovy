@@ -204,6 +204,10 @@ if (targetPhase in ['all', 'templates']) {
         }
 
         templates.createFromGoldenMaster()
+    } catch (IllegalStateException e) {
+        // validation failures and missing files: the message says everything, no stack trace needed
+        println "\n✗ Template generation failed: ${e.message}"
+        System.exit(1)
     } catch (Exception e) {
         println "\n✗ Template generation failed: ${e.message}"
         e.printStackTrace()
