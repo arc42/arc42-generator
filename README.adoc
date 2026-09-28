@@ -139,6 +139,10 @@ docker compose run --rm -v /path/to/req42-framework:/project arc42-builder \
   groovy build.groovy --config=/project/buildconfig.groovy
 ----
 
+=== Testing the Generator
+
+See link:docs/TESTING.md[docs/TESTING.md] for a step-by-step guide (Docker only): self-tests, the arc42 build, building another template such as req42, and what output to expect.
+
 === Build Validation
 
 The build fails on problems in the sources and in the conversion:

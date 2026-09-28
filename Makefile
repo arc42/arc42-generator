@@ -49,7 +49,7 @@ help: ## Show this help
 	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z_-]+:.*## / {printf "  %-14s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 	@echo
 	@echo "OPTS and FORMAT are options for build.groovy (templates, convert, distribution, generate)."
-	@echo "TEMPLATE applies to templates, convert, distribution, generate, test and clean."
+	@echo "TEMPLATE applies to templates, convert, distribution, generate and clean."
 	@echo "build always builds arc42 via ./build-arc42.sh; UPDATE_TEMPLATE=1 make build uses the newest golden master."
 
 image: ## Build the Docker image (Java, Groovy, Pandoc, cmark); rerun after changing the Dockerfile
