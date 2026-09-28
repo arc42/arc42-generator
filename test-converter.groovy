@@ -158,6 +158,16 @@ try {
         "Pandoc's missing-image warning must be recorded, got: ${newRecords*.message}"
     println "✓ Test 12 passed\n"
 
+    println "=== Test 13: DOCX output is reproducible with sourceDateEpoch ==="
+    converter.sourceDateEpoch = 1751846400L
+    def docxA = converter.convertViaPandoc(enPlain, 'docx', 'build2/test/EN/docx/plain')
+    def bytesA = new File(docxA).bytes
+    Thread.sleep(1100)  // DOCX dates have a resolution of seconds
+    def docxB = converter.convertViaPandoc(enPlain, 'docx', 'build2/test/EN/docx/plain')
+    assert Arrays.equals(bytesA, new File(docxB).bytes), "two DOCX conversions with the same sourceDateEpoch must be byte-identical"
+    converter.sourceDateEpoch = null
+    println "✓ Test 13 passed\n"
+
     println "=== All Tests Passed! ==="
     System.exit(0)
 

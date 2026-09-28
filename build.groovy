@@ -160,6 +160,32 @@ if (!failOnLintErrors && templates.hasProperty('failOnLintErrors')) {
     println "⚠ --lint=warn: golden master problems are reported but do not fail the build"
 }
 
+// Reproducible output: dates inside DOCX/EPUB and the timestamps of the ZIP entries come from
+// SOURCE_DATE_EPOCH or, if unset, from the last commit of the golden master, not from the build time.
+def sourceDateEpoch = null
+def sourceDateEpochEnv = System.getenv('SOURCE_DATE_EPOCH')
+if (sourceDateEpochEnv?.isLong()) {
+    sourceDateEpoch = sourceDateEpochEnv.toLong()
+    println "✓ SOURCE_DATE_EPOCH from environment: ${sourceDateEpoch}"
+} else {
+    try {
+        def goldenMasterDir = new File(projectRoot, config.goldenMaster.sourcePath.toString())
+        def git = ['git', '-C', goldenMasterDir.canonicalPath, 'log', '-1', '--format=%ct'].execute()
+        def output = git.text.trim()
+        if (git.waitFor() == 0 && output.isLong()) {
+            sourceDateEpoch = output.toLong()
+            println "✓ SOURCE_DATE_EPOCH from the golden master's last commit: ${sourceDateEpoch}"
+        }
+    } catch (Exception ignored) {
+        // no git or not a repository: Pandoc and the packager fall back to the current time
+    }
+}
+if (sourceDateEpoch == null) {
+    println "⚠ No SOURCE_DATE_EPOCH and no git history for the golden master: DOCX, EPUB and ZIP timestamps use the build time"
+}
+converter.sourceDateEpoch = sourceDateEpoch
+packager.sourceDateEpoch = sourceDateEpoch
+
 // ============================================================================
 // Phase 1: Generate Templates from Golden Master
 // ============================================================================

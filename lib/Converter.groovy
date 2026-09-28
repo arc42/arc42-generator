@@ -36,6 +36,12 @@ class Converter {
     /** Severities from least to most severe; anything unknown is treated like ERROR */
     static final List<Severity> SEVERITY_ORDER = [Severity.DEBUG, Severity.INFO, Severity.WARN, Severity.ERROR, Severity.FATAL]
 
+    /**
+     * Unix timestamp (seconds) that Pandoc uses for the dates inside DOCX and EPUB files instead of "now",
+     * so that unchanged content produces identical files. Null keeps Pandoc's default (current time).
+     */
+    Long sourceDateEpoch = null
+
     Converter(config, projectRoot = new File('.')) {
         this.config = config
         this.projectRoot = projectRoot
@@ -348,6 +354,9 @@ class Converter {
         processBuilder.directory(workingDir)
         // Set UTF-8 encoding in environment
         processBuilder.environment().putAll([LC_ALL: 'en_US.UTF-8', LANG: 'en_US.UTF-8'])
+        if (sourceDateEpoch != null) {
+            processBuilder.environment().put('SOURCE_DATE_EPOCH', sourceDateEpoch.toString())
+        }
         def stdout = new StringBuilder()
         def stderr = new StringBuilder()
         def process = processBuilder.start()
@@ -440,6 +449,8 @@ class Converter {
             'sectanchors': true,
             'numbered': true,
             'imagesdir': 'images',
+            // no "Last updated <build time>" footer: the output of unchanged sources stays byte-identical
+            'reproducible': '',
         ]
 
         // Add version information if available
