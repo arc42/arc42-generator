@@ -9,6 +9,9 @@ import org.asciidoctor.Options
 import org.asciidoctor.Attributes
 import org.asciidoctor.SafeMode
 import groovyx.gpars.GParsPool
+import org.asciidoctor.log.LogHandler
+import org.asciidoctor.log.LogRecord
+import org.asciidoctor.log.Severity
 
 /**
  * Converter.groovy - Format conversion using AsciidoctorJ and Pandoc
@@ -27,10 +30,24 @@ class Converter {
     def projectRoot
     def asciidoctor
 
+    /** Asciidoctor and Pandoc diagnostics (missing includes, missing images, ...) collected across all conversions */
+    final List<LogRecord> diagnostics = Collections.synchronizedList([])
+
+    /** Severities from least to most severe; anything unknown is treated like ERROR */
+    static final List<Severity> SEVERITY_ORDER = [Severity.DEBUG, Severity.INFO, Severity.WARN, Severity.ERROR, Severity.FATAL]
+
+    /**
+     * Unix timestamp (seconds) that Pandoc uses for the dates inside DOCX and EPUB files instead of "now",
+     * so that unchanged content produces identical files. Null keeps Pandoc's default (current time).
+     */
+    Long sourceDateEpoch = null
+
     Converter(config, projectRoot = new File('.')) {
         this.config = config
         this.projectRoot = projectRoot
         this.asciidoctor = Asciidoctor.Factory.create()
+        // Asciidoctor reports content problems only through its logger; collect them so that the build can fail on them
+        this.asciidoctor.registerLogHandler({ LogRecord record -> diagnostics << record } as LogHandler)
     }
 
     /** Base name of the main document and of all generated files, e.g. 'arc42-template' */
@@ -196,6 +213,11 @@ class Converter {
             pandocArgs.addAll(formatConfig.args)
         }
 
+        // Without an identifier Pandoc puts a random UUID into every EPUB (even with SOURCE_DATE_EPOCH)
+        if (format == 'epub') {
+            pandocArgs.addAll(['--metadata', "identifier=${epubIdentifier(template)}".toString()])
+        }
+
         // Special handling for Russian language (LaTeX)
         if (format == 'latex' && language == 'RU') {
             pandocArgs.addAll(['-V', 'fontenc=T1,T2A'])
@@ -210,21 +232,7 @@ class Converter {
 
         // Execute Pandoc with UTF-8 environment
         // IMPORTANT: Run from docbook directory so Pandoc can find relative image paths
-        def processBuilder = new ProcessBuilder(pandocArgs)
-        processBuilder.directory(new File(docbookDir))
-        
-        // Set UTF-8 encoding in environment
-        def env = processBuilder.environment()
-        env['LC_ALL'] = 'en_US.UTF-8'
-        env['LANG'] = 'en_US.UTF-8'
-        
-        def process = processBuilder.start()
-        process.waitFor()
-
-        if (process.exitValue() != 0) {
-            def error = process.err.text
-            throw new RuntimeException("Pandoc conversion failed: ${error}")
-        }
+        runPandoc(pandocArgs, new File(docbookDir), "${template.language}/${template.style} ${format}")
 
         // Post-processing for LaTeX (fix unicode characters)
         if (format == 'latex') {
@@ -299,24 +307,113 @@ class Converter {
         }
     }
 
+    /**
+     * Stable EPUB identifier of a template: a name-based UUID of project, language and style,
+     * so that every template variant has its own identifier and unchanged content produces an identical EPUB.
+     */
+    String epubIdentifier(Map template) {
+        def name = "${projectName}/${template.language}/${template.style}".toString()
+        return "urn:uuid:${UUID.nameUUIDFromBytes(name.getBytes('UTF-8'))}".toString()
+    }
+
     /** Returns true for formats that produce one output file per chapter */
     boolean isMultiPage(String format) {
         return format in ['markdownMP', 'mkdocsMP', 'markdownMPStrict', 'gitHubMarkdownMP']
     }
 
-    // Convert each individual chapter .adoc to a separate DocBook XML (multi-page step 1)
+    /** Returns true for formats that Pandoc renders from the single-document DocBook intermediate */
+    boolean usesDocBookIntermediate(String format) {
+        return !(format in ['html', 'asciidoc', 'docbook']) && !isMultiPage(format)
+    }
+
+    /** Output directory of a template for a format, relative to the project root */
+    String outputDirFor(Map template, String format, String outputBase = 'build') {
+        return "${outputBase}/${template.language}/${format}/${template.style}"
+    }
+
+    /**
+     * Delete the output directories, including the DocBook intermediates, that converting the given
+     * templates to the given formats will write, so that no file of an earlier run survives in the output
+     * (and ends up in a distribution ZIP).
+     *
+     * @return number of directories deleted
+     */
+    int cleanOutputs(List<Map> templates, List<String> formats, String outputBase = 'build') {
+        def dirs = new LinkedHashSet<String>()
+        templates.each { template ->
+            formats.each { format ->
+                dirs << outputDirFor(template, format, outputBase)
+                if (usesDocBookIntermediate(format)) dirs << outputDirFor(template, 'docbook', outputBase)
+                if (isMultiPage(format)) dirs << outputDirFor(template, 'docbookMP', outputBase)
+            }
+        }
+        int deleted = 0
+        dirs.each { relativeDir ->
+            def dir = new File(projectRoot, relativeDir)
+            if (dir.exists()) {
+                dir.deleteDir()
+                deleted++
+            }
+        }
+        println "✓ Cleaned ${deleted} output director${deleted == 1 ? 'y' : 'ies'} under ${outputBase}/"
+        return deleted
+    }
+
+    /**
+     * Run Pandoc in the given directory. Everything Pandoc writes to stderr (e.g. a warning about an
+     * image it could not find) is recorded as a WARN diagnostic; a non-zero exit code fails the conversion.
+     */
+    void runPandoc(List<String> args, File workingDir, String context) {
+        def processBuilder = new ProcessBuilder(args)
+        processBuilder.directory(workingDir)
+        // Set UTF-8 encoding in environment
+        processBuilder.environment().putAll([LC_ALL: 'en_US.UTF-8', LANG: 'en_US.UTF-8'])
+        if (sourceDateEpoch != null) {
+            processBuilder.environment().put('SOURCE_DATE_EPOCH', sourceDateEpoch.toString())
+        }
+        def stdout = new StringBuilder()
+        def stderr = new StringBuilder()
+        def process = processBuilder.start()
+        process.consumeProcessOutput(stdout, stderr)
+        process.waitFor()
+        stderr.toString().readLines().findAll { it.trim() }.each { line ->
+            diagnostics << new LogRecord(Severity.WARN, "pandoc (${context}): ${line.trim()}".toString())
+        }
+        if (process.exitValue() != 0) {
+            throw new RuntimeException("Pandoc failed (${context}, exit code ${process.exitValue()}): ${stderr}")
+        }
+    }
+
+    /**
+     * Convert each chapter .adoc to a separate DocBook XML (multi-page step 1).
+     *
+     * The chapters are converted standalone, i.e. without the main document and without config.adoc.
+     * config.adoc is where the golden master switches its features on (e.g. ':arc42help:'), so the
+     * features of the template style have to be set as attributes here. Without them every
+     * 'ifdef::arc42help[]' block is dropped and the with-help output equals the plain output.
+     */
     void convertToDocBookMP(Map template, String docbookMPRelDir) {
         def outDir = new File(projectRoot, docbookMPRelDir).canonicalFile
         outDir.mkdirs()
         def attrs = createAttributes(template)
+        featureAttributes(template).each { name -> attrs[name] = '' }
         def baseDir = new File(template.srcDir).canonicalFile
-        new File(template.srcDir).eachFile { f ->
+        new File(template.srcDir).listFiles().sort { it.name }.each { f ->
             if (!f.name.endsWith('.adoc') || f.name in [projectName + '.adoc', 'config.adoc']) return
             def opts = Options.builder().toFile(new File(outDir, f.name.replace('.adoc', '.xml')))
                 .backend('docbook').safe(SafeMode.UNSAFE).baseDir(baseDir).mkDirs(true)
                 .attributes(attrs).build()
-            try { asciidoctor.convertFile(f, opts) } catch (Exception e) { /* skip config-only files */ }
+            asciidoctor.convertFile(f, opts)
         }
+    }
+
+    /**
+     * Names of the AsciiDoc attributes that switch on the features of the template's style,
+     * e.g. ['arc42help'] for the with-help style of arc42 (feature prefix + feature name).
+     */
+    List<String> featureAttributes(Map template) {
+        def features = config.goldenMaster.templateStyles[template.style] ?: []
+        return features.collect { "${config.project.featurePrefix}${it}".toString() }
     }
 
     // Convert to multi-page output: one file per chapter via per-chapter DocBook XML + Pandoc
@@ -343,11 +440,7 @@ class Converter {
             def outFile = new File(outputFileDir, xmlFile.name.replace('.xml', ".${formatConfig.extension}"))
             def args = ['pandoc', '-r', 'docbook', '-t', formatConfig.pandocFormat, '-o', outFile.absolutePath, xmlFile.name]
             if (formatConfig.args) args.addAll(formatConfig.args)
-            def pb = new ProcessBuilder(args)
-            pb.directory(docbookMPDir)
-            pb.environment().putAll([LC_ALL: 'en_US.UTF-8', LANG: 'en_US.UTF-8'])
-            def proc = pb.start(); proc.waitFor()
-            if (proc.exitValue() != 0) println "  ⚠ Pandoc failed for ${xmlFile.name}: ${proc.err.text}"
+            runPandoc(args, docbookMPDir, "${template.language}/${template.style} ${format} ${xmlFile.name}")
         }
 
         // drop the generated boilerplate pages, but keep every real chapter
@@ -370,6 +463,8 @@ class Converter {
             'sectanchors': true,
             'numbered': true,
             'imagesdir': 'images',
+            // no "Last updated <build time>" footer: the output of unchanged sources stays byte-identical
+            'reproducible': '',
         ]
 
         // Add version information if available
@@ -415,7 +510,7 @@ class Converter {
      * @param formats List of format names (defaults to all configured formats)
      * @param parallel Enable parallel execution (default: true)
      */
-    void convertAll(List<Map> templates, List<String> formats = null, boolean parallel = true) {
+    Map convertAll(List<Map> templates, List<String> formats = null, boolean parallel = true) {
         if (!formats) {
             formats = config.formats.keySet() as List
         }
@@ -477,5 +572,59 @@ class Converter {
         println "Failed: ${failed}"
         println "Duration: ${String.format('%.1f', duration)}s"
         println ""
+
+        printDiagnostics()
+
+        return [total: totalConversions, successful: completed - failed, failed: failed]
+    }
+
+    /**
+     * Print all diagnostics collected so far, most severe first. The DocBook intermediate is rendered
+     * once per Pandoc format, so identical records are printed once with their count.
+     */
+    void printDiagnostics() {
+        def unique = uniqueDiagnostics()
+        if (unique.isEmpty()) {
+            println "✓ No Asciidoctor or Pandoc diagnostics"
+            println ""
+            return
+        }
+        println "=== Diagnostics: ${unique.size()} ==="
+        unique.each { record ->
+            def location = record.cursor?.file ? " ${relativePath(record.cursor.file)}:${record.cursor.lineNumber}" : ''
+            def times = record.count > 1 ? " (x${record.count})" : ''
+            println "  ${record.severity}${location}: ${record.message}${times}"
+        }
+        println ""
+    }
+
+    /**
+     * Diagnostics whose severity is at least the given level, identical records counted once.
+     *
+     * @param level 'debug', 'info', 'warn', 'error' or 'fatal' (case-insensitive); 'none' selects nothing
+     */
+    List<Map> diagnosticsAtOrAbove(String level) {
+        if (!level || level.equalsIgnoreCase('none')) return []
+        def threshold = Severity.valueOf(level.toUpperCase())
+        return uniqueDiagnostics().findAll { severityIndex(it.severity) >= severityIndex(threshold) }
+    }
+
+    /** Distinct diagnostics (severity, file, line, message) with their number of occurrences, most severe first */
+    List<Map> uniqueDiagnostics() {
+        def grouped = diagnostics.groupBy { [it.severity, it.cursor?.file, it.cursor?.lineNumber, it.message] }
+        def unique = grouped.values().collect { records ->
+            [severity: records[0].severity, cursor: records[0].cursor, message: records[0].message, count: records.size()]
+        }
+        return unique.toSorted { a, b -> severityIndex(b.severity) <=> severityIndex(a.severity) }
+    }
+
+    static int severityIndex(Severity severity) {
+        int index = SEVERITY_ORDER.indexOf(severity)
+        return index >= 0 ? index : SEVERITY_ORDER.indexOf(Severity.ERROR)
+    }
+
+    private String relativePath(String path) {
+        def root = projectRoot.canonicalPath + File.separator
+        return path?.startsWith(root) ? path.substring(root.length()) : path
     }
 }

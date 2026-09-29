@@ -20,6 +20,12 @@ class Packager {
     def config
     def projectRoot
 
+    /**
+     * Unix timestamp (seconds) used as modification time of all ZIP entries, so that a ZIP of unchanged
+     * content is byte-identical. Null uses the current time, as ZipOutputStream does by default.
+     */
+    Long sourceDateEpoch = null
+
     Packager(config, projectRoot = new File('.')) {
         this.config = config
         this.projectRoot = projectRoot
@@ -41,14 +47,18 @@ class Packager {
 
         def zos = new ZipOutputStream(new FileOutputStream(zipFile))
         try {
-            sourceDir.eachFileRecurse { file ->
-                if (file.isFile()) {
-                    def relativePath = file.absolutePath - sourceDir.absolutePath - File.separator
-                    def entry = new ZipEntry(relativePath)
-                    zos.putNextEntry(entry)
-                    file.withInputStream { zos << it }
-                    zos.closeEntry()
+            // sorted entries and a fixed timestamp make the ZIP reproducible
+            def files = []
+            sourceDir.eachFileRecurse { file -> if (file.isFile()) files << file }
+            files.sort { it.absolutePath }.each { file ->
+                def relativePath = file.absolutePath - sourceDir.absolutePath - File.separator
+                def entry = new ZipEntry(relativePath.replace(File.separator, '/'))
+                if (sourceDateEpoch != null) {
+                    entry.time = sourceDateEpoch * 1000L
                 }
+                zos.putNextEntry(entry)
+                file.withInputStream { zos << it }
+                zos.closeEntry()
             }
             return true
         } catch (Exception e) {
