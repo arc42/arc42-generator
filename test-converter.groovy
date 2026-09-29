@@ -176,6 +176,23 @@ try {
     converter.sourceDateEpoch = null
     println "✓ Test 14 passed\n"
 
+    println "=== Test 15: PDF output is reproducible, embeds the images and uses the fallback font for Chinese ==="
+    def pdfA = converter.convertTemplate(enHelp, 'pdf', 'build2/test')
+    assert pdfA != null && new File(pdfA).name == "${config.project.name}-EN.pdf", "PDF conversion should succeed: ${pdfA}"
+    def pdfBytesA = new File(pdfA).bytes
+    assert new String(pdfBytesA, 0, 5, 'ISO-8859-1') == '%PDF-', "output should be a PDF"
+    assert new String(pdfBytesA, 'ISO-8859-1').contains('/Subtype /Image'), "the with-help PDF should embed the images"
+    Thread.sleep(1100)
+    def pdfB = converter.convertTemplate(enHelp, 'pdf', 'build2/test')
+    assert Arrays.equals(pdfBytesA, new File(pdfB).bytes), "two PDF conversions must be byte-identical"
+    def zhPlain = templates.find { it.language == 'ZH' && it.style == 'plain' }
+    if (zhPlain) {
+        def zhPdf = new File(converter.convertTemplate(zhPlain, 'pdf', 'build2/test'))
+        assert new String(zhPdf.bytes, 'ISO-8859-1').contains('DroidSansFallback'),
+            "Chinese text needs the fallback font, otherwise it renders as empty boxes"
+    }
+    println "✓ Test 15 passed\n"
+
     println "=== All Tests Passed! ==="
     System.exit(0)
 
