@@ -1,0 +1,28 @@
+# Tests and full arc42 build in the Docker image, for every pull request (including the
+# submodule updates from Dependabot) and every push to master.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Build the Docker image
+        run: make image
+
+      - name: Test scripts
+        run: make test
+
+      - name: Full arc42 build (validation, all formats, ZIPs)
+        run: make build
