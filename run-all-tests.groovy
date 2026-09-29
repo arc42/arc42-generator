@@ -43,6 +43,11 @@ def tests = [
         name: "Golden Master Lint",
         script: "test-lint.groovy",
         description: "Tests the golden master validation (conditionals, help blocks, images, version.properties, translation drift)"
+    ],
+    [
+        name: "Release Manifest",
+        script: "test-manifest.groovy",
+        description: "Tests manifest.json: languages, styles, formats, sha256 of every ZIP, reproducibility"
     ]
 ]
 

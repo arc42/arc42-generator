@@ -36,7 +36,7 @@ make test       # all test scripts
 * checks out the arc42-template submodule (Golden Master) at the commit recorded in this repository,
 * validates the Golden Master (conditionals, help blocks, the `arc42help` attribute, images, version.properties) and stops on errors,
 * generates the templates in all languages and styles and converts them to 17 output formats (HTML, Markdown variants, DOCX, EPUB, LaTeX, reStructuredText, Textile, DocBook, AsciiDoc), stopping on Asciidoctor or Pandoc diagnostics,
-* creates the distribution ZIPs in `arc42-template/dist/`,
+* creates the distribution ZIPs in `arc42-template/dist/`, together with a `manifest.json` that lists languages (with version and date), styles, formats and every ZIP with its size and SHA-256,
 * validates the output: the Markdown with `cmark` (warnings only) and the images of the with-help styles (fails the build).
 
 Every run starts from a clean `build/` output, so nothing from an earlier run ends up in the ZIPs. The output is reproducible: unchanged content produces byte-identical files and ZIPs (timestamps come from `SOURCE_DATE_EPOCH` or the last commit of the Golden Master, not from the build time; every EPUB gets a fixed identifier derived from project, language and style instead of a random one).
@@ -124,6 +124,7 @@ The generator is not tied to arc42. Everything project-specific lives in the con
 * `project.featurePrefix` - prefix of the feature markers, e.g. `[role="arc42help"]` and `ifdef::arc42help[]`, and of the about page (`about-arc42.adoc`)
 * `project.logo` - the only image copied into the plain style
 * `goldenMaster.sourcePath` and `distribution.targetPath` - location of the sources and of the ZIPs
+* `distribution.languageNames` and the `label` of each format - names used in `manifest.json` (a language or format without one is listed by its code)
 
 `buildconfig.groovy` holds the arc42 values. Another template keeps a complete copy of this file (all sections) in its own repository and follows the layout of `arc42-template`: `<LANG>/<name>.adoc`, `<LANG>/adoc/`, `<LANG>/images/` and `<LANG>/version.properties`.
 Paths in a config file are relative to the directory of that file, including the `build/` output.

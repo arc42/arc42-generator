@@ -28,27 +28,45 @@ goldenMaster {
             // 'with-examples':['help','example'],
     ]
 }
+// label: name of the format in manifest.json (and on the download page)
 formats = [
-    'asciidoc': [imageFolder: true],
-    'html': [imageFolder: true],
-    'epub': [imageFolder: false],
-    'rst': [imageFolder: true],
-    'markdown': [imageFolder: true],
-    'markdownMP': [imageFolder: true],
-    'markdownStrict': [imageFolder: true],
-    'markdownMPStrict': [imageFolder: true],
-    'gitHubMarkdown': [imageFolder: true],
-    'gitHubMarkdownMP': [imageFolder: true],
-    'mkdocs': [imageFolder: true],
-    'mkdocsMP': [imageFolder: true],
-    'textile': [imageFolder: true],
-    'textile2': [imageFolder: true],
-    'docx': [imageFolder: true],
-    'docbook': [imageFolder: true],
-    'latex': [imageFolder: true],
+    'asciidoc': [imageFolder: true, label: 'AsciiDoc'],
+    'html': [imageFolder: true, label: 'HTML'],
+    'epub': [imageFolder: false, label: 'EPUB'],
+    'rst': [imageFolder: true, label: 'reStructuredText'],
+    'markdown': [imageFolder: true, label: 'Markdown'],
+    'markdownMP': [imageFolder: true, label: 'Markdown · multi-page'],
+    'markdownStrict': [imageFolder: true, label: 'Markdown · strict'],
+    'markdownMPStrict': [imageFolder: true, label: 'Markdown MP · strict'],
+    'gitHubMarkdown': [imageFolder: true, label: 'GitHub Markdown'],
+    'gitHubMarkdownMP': [imageFolder: true, label: 'GitHub Markdown · MP'],
+    'mkdocs': [imageFolder: true, label: 'MkDocs'],
+    'mkdocsMP': [imageFolder: true, label: 'MkDocs · multi-page'],
+    'textile': [imageFolder: true, label: 'Textile'],
+    'textile2': [imageFolder: true, label: 'Textile 2'],
+    'docx': [imageFolder: true, label: 'Word (.docx)'],
+    'docbook': [imageFolder: true, label: 'DocBook'],
+    'latex': [imageFolder: true, label: 'LaTeX'],
 ]
 
 distribution {
     targetPath = "arc42-template/dist/"
+
+    // language names for manifest.json; a language without an entry is listed by its code
+    languageNames = [
+            CZ : 'Čeština',
+            DE : 'Deutsch',
+            EN : 'English',
+            ES : 'Español',
+            FR : 'Français',
+            HU : 'Magyar',
+            IT : 'Italiano',
+            NL : 'Nederlands',
+            PT : 'Português',
+            RU : 'Русский',
+            UKR: 'Українська',
+            ZH : '简体中文',
+            'ZH-TW': '繁體中文',
+    ]
     //formats = ['asciidoc','html','epub','markdown','docx','docbook']
 }

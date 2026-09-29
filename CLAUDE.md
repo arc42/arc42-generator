@@ -21,7 +21,7 @@ make generate                 # groovy build.groovy (all phases), no checkout, n
 make templates | convert | distribution   # single phases
 make validate                 # output checks: cmark (warnings only), with-help images (fatal)
 make test                     # groovy run-all-tests.groovy
-make test-lint                # one test script (templates, discovery, converter, config, lint)
+make test-lint                # one test script (templates, discovery, converter, config, lint, manifest)
 make template-checkout        # submodule at the recorded commit (git submodule update --init, in the container)
 make template-update          # submodule to the newest master
 make pin                      # commit the checked-out submodule commit (local git)
@@ -41,10 +41,11 @@ Options of `build.groovy`, passed through make as `OPTS="..."` (e.g. `make templ
 - **Config file**: `--config=path/to/config.groovy` (default `buildconfig.groovy`; paths inside are relative to that file)
 - **Failure level**: `--failure-level=warn|error|fatal|none` (default `warn`): Asciidoctor and Pandoc diagnostics at this level or above fail the build
 - **Lint**: `--lint=warn`: report golden master problems (unbalanced `ifdef`, help blocks without `ifdef`, `ifdef::arc42help[]` without `:arc42help:` being set, missing images, incomplete `version.properties`) instead of failing on them
+- **Release tag**: `--release-tag=2026.09.29`: tag written to `manifest.json` (set by the release, left out otherwise)
 
 Every run starts from a clean output: the `templates` phase deletes `build/src_gen/`, the `convert` phase deletes the output directories (and DocBook intermediates) of the formats it converts. Nothing from an earlier run survives into the distribution ZIPs.
 
-Output is reproducible: the HTML footer carries no build timestamp (Asciidoctor `reproducible`), and the dates inside DOCX/EPUB files and the timestamps of the ZIP entries come from `SOURCE_DATE_EPOCH` or, if unset, from the last commit of the golden master. Every EPUB gets a fixed identifier (a UUID derived from project, language and style) instead of the random UUID Pandoc would otherwise create. Unchanged content produces byte-identical files and ZIPs.
+Output is reproducible: the HTML footer carries no build timestamp (Asciidoctor `reproducible`), and the dates inside DOCX/EPUB files and the timestamps of the ZIP entries come from `SOURCE_DATE_EPOCH` or, if unset, from the last commit of the golden master. Every EPUB gets a fixed identifier (a UUID derived from project, language and style) instead of the random UUID Pandoc would otherwise create. Unchanged content produces byte-identical files and ZIPs, and a byte-identical `manifest.json`.
 
 ## Architecture
 
@@ -85,6 +86,7 @@ Main orchestration script that ties everything together. Supports CLI arguments 
 - **ZIP Creation**: Packages templates + images into distribution archives
 - **Parallel Execution**: Creates all ZIPs concurrently
 - **Output**: `arc42-template/dist/*.zip` files ready for distribution
+- **Manifest**: `writeManifest()` writes `manifest.json` next to the ZIPs: project, release tag (if `--release-tag` is given), golden master commit and date, languages (code, name from `distribution.languageNames`, version and date from `version.properties`), styles, formats (id, `label` from the formats map) and every ZIP of the run with language, style, format, size and `sha256`. Sorted and derived from `SOURCE_DATE_EPOCH`, so it is reproducible. It is the input for GitHub Releases and the download page (decision: ADR 0012 in arc42/meta.arc42.org)
 
 **Performance**: Creates 18 ZIPs in ~0.6s
 
@@ -119,7 +121,7 @@ Only `make` and Docker with Compose v2. The Docker image contains Java 21, Groov
 - `build/src_gen/`: Generated AsciiDoc templates (plain, with-help variants); deleted at the start of the `templates` phase
 - `build/<LANG>/<FORMAT>/<STYLE>/`: Converted templates by language, format and style; deleted at the start of the `convert` phase for the formats being converted
 - `build2/`: Output of the test scripts (ignored by git)
-- `arc42-template/dist/`: Final distribution ZIP files ready for upload
+- `arc42-template/dist/`: Final distribution ZIP files ready for upload, plus `manifest.json`
 
 ## Testing
 
@@ -131,6 +133,7 @@ make test-discovery     # template discovery
 make test-converter     # format conversion, multi-page help text, clean outputs, diagnostics, reproducible DOCX/EPUB
 make test-config        # building a non-arc42 project from its own config file
 make test-lint          # golden master validation on a fixture, ZH-TW discovery, GitHub annotations and report
+make test-manifest      # manifest.json: languages, styles, formats, sha256 of every ZIP, reproducibility
 ```
 
 The test suite validates:
