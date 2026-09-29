@@ -22,6 +22,7 @@ SHELL := /bin/bash
 COMPOSE ?= docker compose
 SERVICE ?= arc42-builder
 OPTS ?=
+DOCKER_RUN_OPTS ?=
 FORMAT ?=
 TEMPLATE ?=
 UPDATE_TEMPLATE ?=
@@ -50,7 +51,7 @@ endif
 ifdef ARC42_IN_CONTAINER
 RUN :=
 else
-RUN := $(COMPOSE) run --rm $(MOUNT) $(SERVICE)
+RUN := $(COMPOSE) run --rm $(MOUNT) $(DOCKER_RUN_OPTS) $(SERVICE)
 endif
 HOST_UID := $(shell id -u)
 HOST_GID := $(shell id -g)
@@ -82,6 +83,7 @@ help: ## Show this help
 	@echo "  TEMPLATE=path      another template repository with its own buildconfig.groovy (not for build, release)"
 	@echo "  UPDATE_TEMPLATE=1  build: use the newest arc42-template master instead of the recorded commit"
 	@echo "  SOURCE_DATE_EPOCH  fixed timestamp for DOCX/EPUB/ZIP entries (default: last commit of the golden master)"
+	@echo "  DOCKER_RUN_OPTS    extra options for docker compose run, e.g. -e GITHUB_ACTIONS=true (used by the CI of arc42-template)"
 	@echo
 	@echo "Test scripts: $(TEST_SCRIPTS)"
 

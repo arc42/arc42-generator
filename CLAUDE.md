@@ -29,7 +29,7 @@ make release                  # build, then push the regenerated dist/*.zip to a
 make clean | clean-dist       # remove build/, build2/ | restore the committed ZIPs
 make shell | versions | image-fresh
 ```
-Variables: `OPTS="..."` (options for build.groovy, see below), `FORMAT=html`, `TEMPLATE=../req42-framework` (another template repository, mounted at `/project`, output below it), `UPDATE_TEMPLATE=1`, `SOURCE_DATE_EPOCH`. Output is written below the current directory (`build/`, `arc42-template/dist/`) and, on Linux, handed back to the calling user (`fix-owner`).
+Variables: `OPTS="..."` (options for build.groovy, see below), `FORMAT=html`, `TEMPLATE=../req42-framework` (another template repository, mounted at `/project`, output below it), `UPDATE_TEMPLATE=1`, `SOURCE_DATE_EPOCH`, `DOCKER_RUN_OPTS` (extra options for `docker compose run`; the arc42-template CI runs `make templates TEMPLATE=$GITHUB_WORKSPACE DOCKER_RUN_OPTS="-e GITHUB_ACTIONS=true -e GITHUB_STEP_SUMMARY=/project/..."`). Output is written below the current directory (`build/`, `arc42-template/dist/`) and, on Linux, handed back to the calling user (`fix-owner`).
 
 The output validation lives in the Makefile (`_validate-markdown`, `_validate-images`) and runs in the container. `release` stops unless the recorded submodule commit is the newest template master (or `UPDATE_TEMPLATE=1`).
 
