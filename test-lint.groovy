@@ -234,6 +234,23 @@ image::sub/dir/other.png[]
     println "  reported: ${templates.formatProblem(problem)}"
     println "✓ Test 9 passed\n"
 
+    println "=== Test 10: Region codes like ZH-TW are languages, other names are not ==="
+    resetFixture()
+    def source = new File(fixture, 'DE')
+    ['ZH-TW', 'zh', 'EN-', 'ZH-TW-X', 'Z'].each { name ->
+        source.eachFileRecurse(groovy.io.FileType.FILES) { file ->
+            def target = new File(new File(fixture, name), file.path - source.path)
+            target.parentFile.mkdirs()
+            target.bytes = file.bytes
+        }
+    }
+    assert templates.discoverLanguages() == ['DE', 'EN', 'ZH-TW'], "unexpected languages: ${templates.discoverLanguages()}"
+    newTemplates().createFromGoldenMaster()
+    def discovered = new GroovyClassLoader().parseClass(new File('lib/Discovery.groovy')).newInstance(config, fixture).discoverTemplates()
+    assert discovered.findAll { it.language == 'ZH-TW' }*.style.sort() == ['plain', 'with-help'], "ZH-TW templates should be discovered: ${discovered*.language}"
+    assert discovered*.language.unique().sort() == ['DE', 'EN', 'ZH-TW'], "unexpected discovered languages: ${discovered*.language.unique()}"
+    println "✓ Test 10 passed\n"
+
     println "=== All Tests Passed! ==="
     System.exit(0)
 

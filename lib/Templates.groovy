@@ -37,7 +37,7 @@ class Templates {
 
     /**
      * Auto-discover available languages by scanning arc42-template/ directory
-     * Looks for directories matching pattern: /^[A-Z]{2,}$/
+     * Looks for directories matching pattern: /^[A-Z]{2,}(-[A-Z]{2,})?$/ (e.g. EN, UKR, ZH-TW)
      * (Matches 2 or more uppercase letters, e.g., DE, EN, ZH, UKR)
      *
      * @return List of language codes (e.g., ['CZ', 'DE', 'EN', 'ES', 'FR', 'IT', 'NL', 'PT', 'RU', 'UKR', 'ZH'])
@@ -50,7 +50,7 @@ class Templates {
         }
 
         def languages = sourcePath.listFiles()
-            ?.findAll { it.isDirectory() && it.name ==~ /^[A-Z]{2,}$/ }
+            ?.findAll { it.isDirectory() && it.name ==~ /^[A-Z]{2,}(-[A-Z]{2,})?$/ }
             *.name
             .sort()
 
