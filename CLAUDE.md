@@ -10,53 +10,31 @@ The actual template content lives in the `arc42-template` git submodule (the "Go
 
 ## Build Commands
 
-### Initial Setup
+**Every task is a make target, and every target runs in Docker** (`docker compose run`). Needed locally: `make` and Docker with Compose v2. Only `make pin` and `make release` use the local git (commit/push with the user's identity). There are no shell scripts and no Gradle wrapper; do not add other entry points. The image sets `ARC42_IN_CONTAINER=1`, so inside the container (`make shell`, `docker compose up`) the same targets run directly.
+
 ```bash
-# Check out the arc42-template submodule at the commit recorded in this repository
-git submodule update --init --recursive
+make help                     # all targets and variables
+make image                    # build the Docker image (Java, Groovy, Pandoc 3.7.0.2, cmark, make, git)
+make build                    # full arc42 build: template-checkout, generate, validate
+make build UPDATE_TEMPLATE=1  # the same with the newest arc42-template master
+make generate                 # groovy build.groovy (all phases), no checkout, no output validation
+make templates | convert | distribution   # single phases
+make validate                 # output checks: cmark (warnings only), with-help images (fatal)
+make test                     # groovy run-all-tests.groovy
+make test-lint                # one test script (templates, discovery, converter, config, lint)
+make template-checkout        # submodule at the recorded commit (git submodule update --init, in the container)
+make template-update          # submodule to the newest master
+make pin                      # commit the checked-out submodule commit (local git)
+make release                  # build, then push the regenerated dist/*.zip to a branch dist/<date>-<sha> of arc42-template
+make clean | clean-dist       # remove build/, build2/ | restore the committed ZIPs
+make shell | versions | image-fresh
 ```
-To build the newest Golden Master instead, run `./build-arc42.sh --update-template` (or set `UPDATE_TEMPLATE=1`); it moves the submodule to the tip of `master` and tells you to pin the new commit with `git add arc42-template && git commit`. Local changes inside the submodule are never deleted.
+Variables: `OPTS="..."` (options for build.groovy, see below), `FORMAT=html`, `TEMPLATE=../req42-framework` (another template repository, mounted at `/project`, output below it), `UPDATE_TEMPLATE=1`, `SOURCE_DATE_EPOCH`. Output is written below the current directory (`build/`, `arc42-template/dist/`) and, on Linux, handed back to the calling user (`fix-owner`).
 
-### In Docker Only (make + docker, nothing else installed)
-```bash
-make help                     # all targets
-make build                    # full arc42 build in the container (./build-arc42.sh)
-make test                     # all test scripts in the container
-make convert FORMAT=html      # single phase / single format; OPTS="..." passes options to build.groovy
-make generate TEMPLATE=../req42-framework   # another template repository
-```
-The Makefile only wraps `docker compose run`; output is written below the current directory (`build/`, `arc42-template/dist/`) and, on Linux, handed back to the calling user.
-
-### Full Build Process (Automated)
-```bash
-./build-arc42.sh
-```
-This script handles everything: installs pandoc 3.7.0.2 if it is missing (checksum-verified), checks out the submodule at the recorded commit (opt-in `--update-template`), runs the full build pipeline and validates the generated Markdown (`cmark`, non-fatal) and the images of the with-help flavors (fatal). `./build-arc42.sh --help` lists options and exit codes.
-
-### Manual Build Steps
-```bash
-# Full build (all phases)
-groovy build.groovy
-
-# Individual phases
-groovy build.groovy templates      # Phase 1: Generate templates from golden master
-groovy build.groovy convert        # Phases 2-3: Discover + convert templates
-groovy build.groovy distribution   # Phase 4: Create distribution ZIP files
-
-# Format-specific build (faster)
-groovy build.groovy --format=html  # Build only HTML format
-```
-
-### Without a Groovy Installation (Gradle Wrapper)
-```bash
-./gradlew check                                   # all test scripts (same as groovy run-all-tests.groovy)
-./gradlew templates                               # groovy build.groovy templates
-./gradlew convert -Popts="--format=html"          # options for build.groovy are passed with -Popts
-./gradlew generate                                # groovy build.groovy (all phases)
-```
-`build.gradle` only launches the Groovy scripts with the dependencies resolved by Gradle (`@Grab` is disabled there); keep its dependency versions in sync with the `@Grab` annotations in `lib/*.groovy`. Needs a JDK and Pandoc, nothing else.
+The output validation lives in the Makefile (`_validate-markdown`, `_validate-images`) and runs in the container. `release` stops unless the recorded submodule commit is the newest template master (or `UPDATE_TEMPLATE=1`).
 
 ### CLI Options
+Options of `build.groovy`, passed through make as `OPTS="..."` (e.g. `make templates OPTS=--lint=warn`):
 - **Phase selection**: `templates`, `convert`, `distribution`, or `all` (default)
 - **Format filter**: `--format=html` (only convert to specified format)
 - **Parallel control**: `--parallel=false` (disable parallel execution)
@@ -108,7 +86,7 @@ Main orchestration script that ties everything together. Supports CLI arguments 
 - **Parallel Execution**: Creates all ZIPs concurrently
 - **Output**: `arc42-template/dist/*.zip` files ready for distribution
 
-**Performance**: Creates 18 ZIPs in ~0.6s (vs ~15s with Gradle)
+**Performance**: Creates 18 ZIPs in ~0.6s
 
 ### Key Configuration Files
 - **buildconfig.groovy**: Defines template styles, output formats, and paths
@@ -134,25 +112,8 @@ The Golden Master uses AsciiDoc role attributes to mark content (prefix set by `
 - `[role="arc42example"]` - Example content (currently unused)
 - `lib/Templates.groovy` removes unwanted features using regex to create template variants
 
-### Performance Comparison
-**Full HTML Build** (18 templates):
-- **Groovy**: 17.4s (template generation + conversion + packaging)
-- **Gradle**: ~90s
-- **Speedup**: 5.2x faster
-
-**Why Faster**:
-1. True parallel execution with GParsPool (better CPU utilization)
-2. No Gradle initialization overhead
-3. Direct library calls (AsciidoctorJ, Pandoc)
-4. Simpler architecture (no chicken-and-egg problems)
-
 ## System Requirements
-- **Groovy**: Version 4.0 or higher (tested with Groovy 5.0.2)
-  - Install via SDKMAN: `sdk install groovy`
-- **Java Runtime**: Version 11 or higher (tested with OpenJDK 21)
-- **Pandoc**: Version 3.0 or higher required for format conversions (tested with 3.7.0.2)
-  - Install on Debian/Ubuntu: `wget <pandoc-deb-url> && sudo dpkg -i <pandoc-deb>`
-  - `build-arc42.sh` auto-installs Pandoc if missing
+Only `make` and Docker with Compose v2. The Docker image contains Java 21, Groovy 5.0.3, Pandoc 3.7.0.2 (pinned, checksum-verified), cmark, make and git. The Groovy scripts need Groovy 4.0+ and Java 11+ if they are ever run outside the image.
 
 ## Output Locations
 - `build/src_gen/`: Generated AsciiDoc templates (plain, with-help variants); deleted at the start of the `templates` phase
@@ -164,16 +125,12 @@ The Golden Master uses AsciiDoc role attributes to mark content (prefix set by `
 
 ### Automated Test Suite
 ```bash
-# Run all integration tests
-groovy run-all-tests.groovy
-./gradlew check               # the same five scripts without a Groovy installation
-
-# Run individual test suites
-groovy test-templates.groovy   # Test template generation
-groovy test-discovery.groovy   # Test template discovery
-groovy test-converter.groovy   # Test format conversion, multi-page help text, clean outputs, diagnostics
-groovy test-config.groovy      # Test building a non-arc42 project from its own config file
-groovy test-lint.groovy        # Test the golden master validation on a fixture
+make test               # all test scripts (groovy run-all-tests.groovy in the container)
+make test-templates     # template generation
+make test-discovery     # template discovery
+make test-converter     # format conversion, multi-page help text, clean outputs, diagnostics, reproducible DOCX/EPUB
+make test-config        # building a non-arc42 project from its own config file
+make test-lint          # golden master validation on a fixture, ZH-TW discovery, GitHub annotations and report
 ```
 
 The test suite validates:
@@ -189,7 +146,7 @@ The test suite validates:
 ### Adding a New Language
 1. Create language folder in `arc42-template/<LANG>/` submodule (must match `/^[A-Z]{2,}(-[A-Z]{2,})?$/`, e.g. `TR` or `ZH-TW`)
 2. Add template content (AsciiDoc files)
-3. Run `groovy build.groovy` - language will be auto-discovered
+3. Run `make build UPDATE_TEMPLATE=1` (or `make generate` for what is checked out) - language will be auto-discovered
 4. No code changes needed!
 
 ### Adding a New Output Format
@@ -204,18 +161,13 @@ The test suite validates:
    }
    ```
 3. Update `convertAll()` method to handle new format
-4. Test with `groovy build.groovy --format=myformat`
+4. Test with `make convert FORMAT=myformat`
 
 ### Testing Single Format/Language
 ```bash
-# Test template generation only
-groovy build.groovy templates
-
-# Test specific format conversion
-groovy build.groovy --format=html
-
-# Full build
-groovy build.groovy
+make templates                # template generation only
+make convert FORMAT=html      # one format
+make build                    # full build
 ```
 
 ### Debugging Conversion Issues
@@ -223,91 +175,20 @@ groovy build.groovy
 # The build prints a 'Diagnostics' section after the conversion: Asciidoctor log records
 # (missing includes, unknown block styles, ...) and Pandoc warnings (e.g. images it could not find),
 # each with file and line where available. Lower the bar to see whether the build passes otherwise:
-groovy build.groovy convert --failure-level=error
+make convert OPTS=--failure-level=error
 
 # Report golden master problems without failing:
-groovy build.groovy templates --lint=warn
+make templates OPTS=--lint=warn
 
 # Test single template conversion
-groovy test-converter.groovy  # Tests EN:plain and EN:with-help templates
+make test-converter          # Tests EN:plain and EN:with-help templates
+
+# Look around inside the container (make targets work there too):
+make shell
 ```
 
 ## Git Workflow
 When updating templates:
-1. Work in the `arc42-template` submodule (commit there first), or move it to the newest `master` with `./build-arc42.sh --update-template`
-2. Update submodule reference in main repo: `git add arc42-template` (the build is reproducible from this pinned commit)
-3. Build and test distribution files
-4. Commit distribution ZIPs in the submodule: `cd arc42-template && git commit dist/*.zip && git push`
-
-
-You are an AI assistant that helps users develop software features.
-You do this by following a structured development process guided by the responsible-vibe-mcp server.
-
-IMPORTANT: Use responsible-vibe-mcp tools after each user message!
-
-Use the start_development() to start a new development.
-
-## Core Workflow
-
-Each tool call will return a JSON formatted response with an "instructions" field in it. Follow these instructions immediately after you received them.
-
-1. **Call whats_next() after each user interaction** to get phase-specific instructions
-2. **Follow the instructions** provided by responsible-vibe-mcp exactly
-3. **Update the plan file** as directed to maintain project memory
-4. **Mark completed tasks** with [x] when instructed
-5. **Provide conversation context** in each whats_next() call
-
-## Development Workflow
-
-The responsible-vibe-mcp server will guide you through development phases specific to the chosen workflow. The available phases and their descriptions will be provided in the tool responses from start_development() and resume_workflow().
-
-## Using whats_next()
-
-After each user interaction, call:
-
-```
-whats_next({
-  context: "Brief description of current situation",
-  user_input: "User's latest message",
-  conversation_summary: "Summary of conversation progress so far",
-  recent_messages: [
-    { role: "assistant", content: "Your recent message" },
-    { role: "user", content: "User's recent response" }
-  ]
-})
-```
-
-## Phase Transitions
-
-You can transition to the next phase when the tasks of the current phase were completed and the entrance criteria for the current phase have been met.
-
-Before suggesting any phase transition:
-- **Check the plan file** for the "Phase Entrance Criteria" section
-- **Evaluate current progress** against the defined criteria
-- **Only suggest transitions** when criteria are clearly met
-- **Be specific** about which criteria have been satisfied
-- **Ask the user** whether he agrees that the current phase is complete.
-
-```
-proceed_to_phase({
-  target_phase: "target_phase_name",  // Use phase names from the current workflow
-  reason: "Why you're transitioning"
-})
-```
-
-## Plan File Management
-
-- Add new tasks as they are identified
-- Mark tasks complete [x] when finished
-- Document important decisions in the Decisions Log
-- Keep the structure clean and readable
-
-## Conversation Context Guidelines
-
-Since responsible-vibe-mcp operates statelessly, provide:
-
-- **conversation_summary**: What the user wants, key decisions, progress
-- **recent_messages**: Last 3-5 relevant exchanges
-- **context**: Current situation and what you're trying to determine
-
-Remember: responsible-vibe-mcp guides the development process but relies on you to provide conversation context and follow its instructions precisely.
+1. Template changes (including translations) are made in arc42-template via pull requests; its CI validates them with this generator.
+2. When arc42-template master moves, Dependabot opens a pull request here that moves the submodule pin; the CI builds it. Manually: `make template-update && make pin`.
+3. `make release` builds and pushes the regenerated ZIPs to a branch of arc42-template; merging that pull request publishes them.

@@ -198,5 +198,5 @@ restrictions. Please note - there is no guarantee!
 == Technische Rahmenbedingungen
 
 * Die Generierung der Formate soll so weit wie möglich automatisiert sein
-* Der Build der <<out_formats, Ausgabeformate>> erfolgt mit Groovy-Skripten und Shell (z. B. `build-arc42.sh`)
+* Der Build der <<out_formats, Ausgabeformate>> erfolgt mit Groovy-Skripten, gestartet über `make`-Targets in Docker (z. B. `make build`)
 * Weitere Tools (z. B. Pandoc) werden automatisiert installiert und genutzt
