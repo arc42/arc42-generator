@@ -225,8 +225,7 @@ class Converter {
 
         // Add standalone flag for most formats
         if (format in ['latex', 'rst', 'markdown', 'markdownMP', 'markdownStrict',
-                       'markdownMPStrict', 'gitHubMarkdown', 'gitHubMarkdownMP',
-                       'mkdocs', 'mkdocsMP']) {
+                       'markdownMPStrict', 'gitHubMarkdown', 'gitHubMarkdownMP']) {
             pandocArgs.add(1, '-s')  // Insert after 'pandoc'
         }
 
@@ -291,9 +290,7 @@ class Converter {
 
         def sourceImagesDir = new File(template.imagesDir)
 
-        // mkdocs/mkdocsMP use docs/images, others use images
-        def targetImagesPath = (format in ['mkdocs', 'mkdocsMP']) ? "${outputDir}/docs/images" : "${outputDir}/images"
-        def targetImagesDir = new File(projectRoot, targetImagesPath)
+        def targetImagesDir = new File(projectRoot, "${outputDir}/images")
         targetImagesDir.mkdirs()
 
         // Copy all image files
@@ -318,7 +315,7 @@ class Converter {
 
     /** Returns true for formats that produce one output file per chapter */
     boolean isMultiPage(String format) {
-        return format in ['markdownMP', 'mkdocsMP', 'markdownMPStrict', 'gitHubMarkdownMP']
+        return format in ['markdownMP', 'markdownMPStrict', 'gitHubMarkdownMP']
     }
 
     /** Returns true for formats that Pandoc renders from the single-document DocBook intermediate */
@@ -443,11 +440,6 @@ class Converter {
             runPandoc(args, docbookMPDir, "${template.language}/${template.style} ${format} ${xmlFile.name}")
         }
 
-        // drop the generated boilerplate pages, but keep every real chapter
-        if (format == 'mkdocsMP') {
-            ['config.md', "about-${config.project.featurePrefix}.md".toString()].each { new File(outputFileDir, it).delete() }
-        }
-
         return outputFileDir.absolutePath
     }
 
@@ -490,10 +482,7 @@ class Converter {
             'markdownMPStrict': [pandocFormat: 'markdown_strict', extension: 'md', args: []],
             'gitHubMarkdown': [pandocFormat: 'gfm', extension: 'md', args: []],
             'gitHubMarkdownMP': [pandocFormat: 'gfm', extension: 'md', args: []],
-            'mkdocs': [pandocFormat: 'markdown', extension: 'md', args: []],
-            'mkdocsMP': [pandocFormat: 'markdown', extension: 'md', args: []],
             'textile': [pandocFormat: 'textile', extension: 'textile', args: []],
-            'textile2': [pandocFormat: 'textile', extension: 'textile', args: []],
             'docx': [pandocFormat: 'docx', extension: 'docx', args: []],
             'epub': [pandocFormat: 'epub', extension: 'epub', args: []],
             'latex': [pandocFormat: 'latex', extension: 'tex', args: []],

@@ -93,7 +93,7 @@ Main orchestration script that ties everything together. Supports CLI arguments 
 ### Key Configuration Files
 - **buildconfig.groovy**: Defines template styles, output formats, and paths
   - `templateStyles`: `plain` (no help), `with-help` (includes help text)
-  - `formats`: 15+ output formats including asciidoc, html, markdown, docx, epub, latex, etc.
+  - `formats`: 14 output formats including asciidoc, html, markdown, docx, epub, latex, etc.
   - `goldenMaster`: Path to arc42-template submodule
 
 ### Supported Languages
@@ -106,7 +106,7 @@ The system automatically discovers all language directories in `arc42-template/`
 - **AsciiDoc → Other formats**: Two-step process
   1. AsciiDoc → DocBook XML (via AsciidoctorJ)
   2. DocBook → Target format (via Pandoc)
-- **Multi-page formats**: markdownMP, mkdocsMP, etc. split the template into separate files
+- **Multi-page formats**: markdownMP, gitHubMarkdownMP, etc. split the template into separate files
 
 ### Feature Flag System
 The Golden Master uses AsciiDoc role attributes to mark content (prefix set by `project.featurePrefix` in the config):
