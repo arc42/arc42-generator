@@ -251,6 +251,35 @@ image::sub/dir/other.png[]
     assert discovered*.language.unique().sort() == ['DE', 'EN', 'ZH-TW'], "unexpected discovered languages: ${discovered*.language.unique()}"
     println "✓ Test 10 passed\n"
 
+    println "=== Test 11: GitHub annotations and Markdown report of the lint problems ==="
+    resetFixture()
+    new File(fixture, 'EN/adoc/01_chapter.adoc').append('image::missing,one.png[]\n', 'utf-8')
+    new File(fixture, 'DE/adoc/config.adoc').write("// no feature attribute\n", 'utf-8')
+    new File(fixture, 'DE/adoc/03_extra.adoc').write("== Extra chapter\n", 'utf-8')
+    problems = templates.validateGoldenMaster()
+    def imageProblem = problems.find { it.message.contains('missing,one.png') }
+    def languageProblem = problems.find { it.file == 'DE' }
+    def dirProblem = problems.find { it.file == 'DE/adoc' }
+    assert imageProblem && languageProblem && dirProblem, "unexpected problems: ${problems}"
+
+    // a file with a line: annotated on that line; ',' and ':' in properties and '%' in data are escaped
+    assert templates.githubAnnotation(imageProblem) ==
+        "::error file=EN/adoc/01_chapter.adoc,line=15,title=Golden master validation::image 'missing,one.png' not found in EN/images/"
+    // a directory is no file GitHub can annotate: the location moves into the message
+    def annotation = templates.githubAnnotation(languageProblem)
+    assert annotation.startsWith('::error title=Golden master validation::DE: ifdef::demohelp[] is used'), annotation
+    assert templates.githubAnnotation(dirProblem).startsWith('::warning title=Golden master validation::DE/adoc: chapter files differ'), templates.githubAnnotation(dirProblem)
+    assert templates.githubAnnotation([severity: 'warning', file: 'EN/version.properties', line: null, message: '100% done\nnext']) ==
+        '::warning file=EN/version.properties,title=Golden master validation::100%25 done%0Anext'
+
+    def report = templates.lintReport(problems, ['DE', 'EN'])
+    assert report.contains('2 error(s), 1 warning(s)'), report
+    assert report.contains('| DE | 1 | 1 |') && report.contains('| EN | 1 | 0 |'), "per-language counts expected:\n${report}"
+    assert report.contains("| ❌ error | `EN/adoc/01_chapter.adoc:15` | image 'missing,one.png' not found in EN/images/ |"), report
+    assert templates.lintReport([], ['DE', 'EN']).contains('No problems found'), "a clean report should say so"
+    println report
+    println "✓ Test 11 passed\n"
+
     println "=== All Tests Passed! ==="
     System.exit(0)
 

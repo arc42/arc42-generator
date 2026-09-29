@@ -85,7 +85,7 @@ Main orchestration script that ties everything together. Supports CLI arguments 
 
 #### `lib/Templates.groovy`
 - **Language Auto-Discovery**: Scans `arc42-template/` for language directories matching `/^[A-Z]{2,}(-[A-Z]{2,})?$/` (e.g. `EN`, `UKR`, `ZH-TW`)
-- **Golden Master Validation**: `validateGoldenMaster()` reports errors (unbalanced `ifdef`/`endif`, help blocks without `ifdef`, `ifdef::arc42help[]` without `:arc42help:` being set, missing images, incomplete `version.properties`) and warnings (chapter set or help-block count differs from EN); errors fail `createFromGoldenMaster()` unless `failOnLintErrors` is false
+- **Golden Master Validation**: `validateGoldenMaster()` reports errors (unbalanced `ifdef`/`endif`, help blocks without `ifdef`, `ifdef::arc42help[]` without `:arc42help:` being set, missing images, incomplete `version.properties`) and warnings (chapter set or help-block count differs from EN); errors fail `createFromGoldenMaster()` unless `failOnLintErrors` is false; in GitHub Actions (`GITHUB_ACTIONS=true`) every problem is also printed as annotation (`githubAnnotation()`) and a Markdown report (`lintReport()`) is appended to `GITHUB_STEP_SUMMARY`
 - **Feature Flag Removal**: Uses regex patterns to strip `[role="arc42help"]` blocks and `ifdef::arc42help` statements
 - **Template Generation**: Creates one template variant per language and style (12 languages × 2 styles = 24 for arc42)
 
