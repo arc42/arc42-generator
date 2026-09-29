@@ -7,7 +7,7 @@ If you want to use an arc42 template for your system, you **don't need to use th
 The content (structure + embedded-help) of the arc42 template are maintained in the https://github.com/arc42/arc42-template repository. 
 
 
->See section [#generator-requirements] for a brief explanation of terminology and requirements.
+>See section <<generator-requirements>> for a brief explanation of terminology and requirements.
 
 == How to Build
 
@@ -50,7 +50,7 @@ The build will:
 * Validate CommonMark markdown and image references
 * Create distribution ZIP files in `arc42-template/dist/`
 
-Every run starts from a clean `build/` output, so nothing from an earlier run ends up in the ZIPs. The output is reproducible: unchanged content produces byte-identical files and ZIPs (timestamps come from `SOURCE_DATE_EPOCH` or the last commit of the Golden Master, not from the build time).
+Every run starts from a clean `build/` output, so nothing from an earlier run ends up in the ZIPs. The output is reproducible: unchanged content produces byte-identical files and ZIPs (timestamps come from `SOURCE_DATE_EPOCH` or the last commit of the Golden Master, not from the build time; every EPUB gets a fixed identifier derived from project, language and style instead of a random one).
 
 Results are written to the local `build/` directory.
 
@@ -177,6 +177,7 @@ The container includes:
 **No local installation of Java, Groovy, or Pandoc is required or supported.**
 
 
+[[generator-requirements]]
 == General Requirements
 
 === Requirements Concerning the Generator
