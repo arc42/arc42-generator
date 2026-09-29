@@ -89,6 +89,7 @@ make generate OPTS="--parallel=false"          # sequential conversion
 make build UPDATE_TEMPLATE=1                   # build the newest arc42-template master instead of the recorded commit
 make generate TEMPLATE=../req42-framework      # another template repository, see below
 SOURCE_DATE_EPOCH=1751846400 make generate     # fixed timestamp for DOCX/EPUB/ZIP entries
+make templates DOCKER_RUN_OPTS="-e FOO=bar"    # extra options for docker compose run (the arc42-template CI passes GITHUB_ACTIONS this way)
 ----
 
 `docker compose up` runs `make build` inside the container, for example in GitHub Codespaces.
