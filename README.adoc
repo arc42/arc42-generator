@@ -147,7 +147,7 @@ See link:docs/TESTING.md[docs/TESTING.md] for a step-by-step guide (Docker only)
 
 The build fails on problems in the sources and in the conversion:
 
-* **Golden Master lint** (before generation): unbalanced `ifdef::arc42help[]`/`endif::arc42help[]`, help blocks that are not wrapped in a conditional, image references without a file in `<LANG>/images/`, and incomplete `version.properties` are errors; a chapter set or help-block count that differs from EN is a warning. Use `--lint=warn` to report instead of fail.
+* **Golden Master lint** (before generation): unbalanced `ifdef::arc42help[]`/`endif::arc42help[]`, help blocks that are not wrapped in a conditional, a language that uses `ifdef::arc42help[]` but never sets `:arc42help:` (its with-help template would lose all help text), image references without a file in `<LANG>/images/`, and incomplete `version.properties` are errors; a chapter set or help-block count that differs from EN is a warning. Use `--lint=warn` to report instead of fail.
 * **Diagnostics** (after conversion): Asciidoctor log records (e.g. a missing include) and Pandoc warnings (e.g. an image it could not embed into DOCX or EPUB) are printed with file and line. Records at `--failure-level` (default `warn`) or above fail the build.
 * **Clean output**: the output directories of a phase are deleted before the phase runs.
 

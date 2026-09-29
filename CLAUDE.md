@@ -62,7 +62,7 @@ groovy build.groovy --format=html  # Build only HTML format
 - **Parallel control**: `--parallel=false` (disable parallel execution)
 - **Config file**: `--config=path/to/config.groovy` (default `buildconfig.groovy`; paths inside are relative to that file)
 - **Failure level**: `--failure-level=warn|error|fatal|none` (default `warn`): Asciidoctor and Pandoc diagnostics at this level or above fail the build
-- **Lint**: `--lint=warn`: report golden master problems (unbalanced `ifdef`, help blocks without `ifdef`, missing images, incomplete `version.properties`) instead of failing on them
+- **Lint**: `--lint=warn`: report golden master problems (unbalanced `ifdef`, help blocks without `ifdef`, `ifdef::arc42help[]` without `:arc42help:` being set, missing images, incomplete `version.properties`) instead of failing on them
 
 Every run starts from a clean output: the `templates` phase deletes `build/src_gen/`, the `convert` phase deletes the output directories (and DocBook intermediates) of the formats it converts. Nothing from an earlier run survives into the distribution ZIPs.
 
@@ -85,7 +85,7 @@ Main orchestration script that ties everything together. Supports CLI arguments 
 
 #### `lib/Templates.groovy`
 - **Language Auto-Discovery**: Scans `arc42-template/` for language directories matching `/^[A-Z]{2,}$/`
-- **Golden Master Validation**: `validateGoldenMaster()` reports errors (unbalanced `ifdef`/`endif`, help blocks without `ifdef`, missing images, incomplete `version.properties`) and warnings (chapter set or help-block count differs from EN); errors fail `createFromGoldenMaster()` unless `failOnLintErrors` is false
+- **Golden Master Validation**: `validateGoldenMaster()` reports errors (unbalanced `ifdef`/`endif`, help blocks without `ifdef`, `ifdef::arc42help[]` without `:arc42help:` being set, missing images, incomplete `version.properties`) and warnings (chapter set or help-block count differs from EN); errors fail `createFromGoldenMaster()` unless `failOnLintErrors` is false
 - **Feature Flag Removal**: Uses regex patterns to strip `[role="arc42help"]` blocks and `ifdef::arc42help` statements
 - **Template Generation**: Creates one template variant per language and style (12 languages × 2 styles = 24 for arc42)
 
