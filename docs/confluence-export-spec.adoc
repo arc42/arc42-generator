@@ -1,0 +1,41 @@
+= Confluence Export Specification
+
+== Goal
+
+Generate an importable, text/XML-based Confluence space export from each
+supported arc42 language and content flavor (plain and with-help). This is a
+one-way publishing artifact; editing or synchronizing content back to AsciiDoc
+is out of scope.
+
+== Deliverable and content
+
+* Produce a package that can be imported using Confluence's supported space
+  import mechanism, not merely an XHTML page or a collection of XML files.
+* Include the complete page tree, page content, and required image attachments.
+  The hierarchy should follow the template's root, chapters, and subordinate
+  sections. Internal links and image references must resolve after import.
+* Preserve headings, paragraphs, lists, tables, links, and the distinction
+  between plain and help content where the target supports it. Replace
+  unsupported constructs with readable content; do not require third-party
+  plugins or macros.
+* Make page titles unique within the exported space. Include language, flavor,
+  and source revision information in the package metadata or accompanying
+  documentation.
+* Do not include project-specific space settings, users, permissions, or
+  unrelated content.
+
+== Compatibility
+
+Confluence's native export/import format is version-dependent; a generic XML
+document cannot be assumed to be importable across releases. Generate the
+package in the native format of a declared Confluence Server/Data Center
+target, and publish a compatibility matrix listing the exporter format and
+versions on which imports have been verified. Prefer a format that imports
+into the widest tested range, but do not claim compatibility with untested
+versions. Confluence Cloud must be listed separately and supported only if its
+documented import path accepts the generated package.
+
+Validate each supported target by importing into a clean instance and checking
+the page tree, text, links, and attachments. Record any manual import or
+upgrade steps. The exact XML schema and package layout are implementation
+decisions, subject to these import and compatibility requirements.
