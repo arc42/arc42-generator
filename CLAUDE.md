@@ -84,8 +84,8 @@ Output is reproducible: the HTML footer carries no build timestamp (Asciidoctor 
 Main orchestration script that ties everything together. Supports CLI arguments for phase selection, format filtering, failure level and lint mode. Cleans the output of a phase before running it and exits with code 1 on failed conversions or diagnostics at or above the failure level.
 
 #### `lib/Templates.groovy`
-- **Language Auto-Discovery**: Scans `arc42-template/` for language directories matching `/^[A-Z]{2,}$/`
-- **Golden Master Validation**: `validateGoldenMaster()` reports errors (unbalanced `ifdef`/`endif`, help blocks without `ifdef`, `ifdef::arc42help[]` without `:arc42help:` being set, missing images, incomplete `version.properties`) and warnings (chapter set or help-block count differs from EN); errors fail `createFromGoldenMaster()` unless `failOnLintErrors` is false
+- **Language Auto-Discovery**: Scans `arc42-template/` for language directories matching `/^[A-Z]{2,}(-[A-Z]{2,})?$/` (e.g. `EN`, `UKR`, `ZH-TW`)
+- **Golden Master Validation**: `validateGoldenMaster()` reports errors (unbalanced `ifdef`/`endif`, help blocks without `ifdef`, `ifdef::arc42help[]` without `:arc42help:` being set, missing images, incomplete `version.properties`) and warnings (chapter set or help-block count differs from EN); errors fail `createFromGoldenMaster()` unless `failOnLintErrors` is false; in GitHub Actions (`GITHUB_ACTIONS=true`) every problem is also printed as annotation (`githubAnnotation()`) and a Markdown report (`lintReport()`) is appended to `GITHUB_STEP_SUMMARY`
 - **Feature Flag Removal**: Uses regex patterns to strip `[role="arc42help"]` blocks and `ifdef::arc42help` statements
 - **Template Generation**: Creates one template variant per language and style (12 languages × 2 styles = 24 for arc42)
 
@@ -119,7 +119,7 @@ Main orchestration script that ties everything together. Supports CLI arguments 
 ### Supported Languages
 **Auto-discovered**: CZ, DE, EN, ES, FR, HU, IT, NL, PT, RU, UKR, ZH (12 languages)
 
-The system automatically discovers all language directories in `arc42-template/` that match the pattern `/^[A-Z]{2,}$/`. No hardcoding required.
+The system automatically discovers all language directories in `arc42-template/` that match the pattern `/^[A-Z]{2,}(-[A-Z]{2,})?$/`: a language code, optionally with a region such as `ZH-TW`. No hardcoding required.
 
 ### Format Conversion Strategy
 - **AsciiDoc → HTML**: Direct conversion via AsciidoctorJ
@@ -187,7 +187,7 @@ The test suite validates:
 ## Common Development Scenarios
 
 ### Adding a New Language
-1. Create language folder in `arc42-template/<LANG>/` submodule (must match `/^[A-Z]{2,}$/`)
+1. Create language folder in `arc42-template/<LANG>/` submodule (must match `/^[A-Z]{2,}(-[A-Z]{2,})?$/`, e.g. `TR` or `ZH-TW`)
 2. Add template content (AsciiDoc files)
 3. Run `groovy build.groovy` - language will be auto-discovered
 4. No code changes needed!

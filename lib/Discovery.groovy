@@ -57,9 +57,9 @@ class Discovery {
 
         def templates = []
 
-        // Scan for language directories (e.g., EN, DE, FR, ZH, UKR)
+        // Scan for language directories (e.g., EN, DE, FR, ZH, UKR, ZH-TW)
         def languageDirs = srcGenPath.listFiles()
-            ?.findAll { it.isDirectory() && it.name ==~ /^[A-Z]{2,}$/ }
+            ?.findAll { it.isDirectory() && it.name ==~ /^[A-Z]{2,}(-[A-Z]{2,})?$/ }
             ?.sort { it.name }
 
         if (!languageDirs || languageDirs.isEmpty()) {

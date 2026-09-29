@@ -37,7 +37,7 @@ class Templates {
 
     /**
      * Auto-discover available languages by scanning arc42-template/ directory
-     * Looks for directories matching pattern: /^[A-Z]{2,}$/
+     * Looks for directories matching pattern: /^[A-Z]{2,}(-[A-Z]{2,})?$/ (e.g. EN, UKR, ZH-TW)
      * (Matches 2 or more uppercase letters, e.g., DE, EN, ZH, UKR)
      *
      * @return List of language codes (e.g., ['CZ', 'DE', 'EN', 'ES', 'FR', 'IT', 'NL', 'PT', 'RU', 'UKR', 'ZH'])
@@ -50,7 +50,7 @@ class Templates {
         }
 
         def languages = sourcePath.listFiles()
-            ?.findAll { it.isDirectory() && it.name ==~ /^[A-Z]{2,}$/ }
+            ?.findAll { it.isDirectory() && it.name ==~ /^[A-Z]{2,}(-[A-Z]{2,})?$/ }
             *.name
             .sort()
 
@@ -232,10 +232,68 @@ class Templates {
         def failed = errors && failOnLintErrors
         println "${failed ? '✗' : '✓'} Golden master validation: ${errors.size()} error(s), ${warnings.size()} warning(s)"
 
+        // In GitHub Actions: annotations on the lines of the pull request and a report in the job summary
+        if (System.getenv('GITHUB_ACTIONS') == 'true') {
+            problems.each { println githubAnnotation(it) }
+            def summary = System.getenv('GITHUB_STEP_SUMMARY')
+            if (summary) {
+                new File(summary).append(lintReport(problems, languages ?: discoverLanguages()), 'utf-8')
+            }
+        }
+
         if (failed) {
             def details = errors.collect { "  ✗ ${formatProblem(it)}" }.join('\n')
             throw new IllegalStateException("Golden master validation failed: ${errors.size()} error(s)\n${details}")
         }
+    }
+
+    /**
+     * A problem as GitHub Actions workflow command, shown as annotation on the file and line in a
+     * pull request. A problem of a directory (e.g. a whole language) carries its location in the message.
+     */
+    String githubAnnotation(Map problem) {
+        def escapeData = { String s -> s.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A') }
+        def escapeProperty = { String s -> escapeData(s).replace(':', '%3A').replace(',', '%2C') }
+
+        def sourceRoot = new File(projectRoot, config.goldenMaster.sourcePath)
+        def properties = []
+        def message = problem.message
+        if (new File(sourceRoot, problem.file).isFile()) {
+            properties << "file=${escapeProperty(problem.file)}"
+            if (problem.line != null) properties << "line=${problem.line}"
+        } else {
+            message = "${problem.file}: ${message}"
+        }
+        properties << 'title=Golden master validation'
+        return "::${problem.severity} ${properties.join(',')}::${escapeData(message)}".toString()
+    }
+
+    /** Markdown report of the lint problems: counts per language, then every problem */
+    String lintReport(List<Map> problems, List<String> languages) {
+        def errors = problems.count { it.severity == 'error' }
+        def warnings = problems.count { it.severity == 'warning' }
+        def cell = { String s -> s.replace('|', '\\|').replace('\n', ' ') }
+
+        def report = new StringBuilder("## Golden master validation\n\n")
+        if (!problems) {
+            return report.append("✅ No problems found in ${languages.size()} language(s): ${languages.join(', ')}.\n").toString()
+        }
+        report << "${errors ? '❌' : '⚠️'} ${errors} error(s), ${warnings} warning(s). " <<
+            "Errors fail the build; warnings point to differences from ${REFERENCE_LANGUAGE}.\n\n"
+
+        report << "| Language | Errors | Warnings |\n|---|---|---|\n"
+        languages.each { language ->
+            def own = problems.findAll { it.language == language }
+            report << "| ${language} | ${own.count { it.severity == 'error' }} | ${own.count { it.severity == 'warning' }} |\n"
+        }
+
+        report << "\n| Severity | Location | Problem |\n|---|---|---|\n"
+        problems.sort { a, b -> (a.severity <=> b.severity) ?: (a.file <=> b.file) ?: ((a.line ?: 0) <=> (b.line ?: 0)) }.each { problem ->
+            def severity = problem.severity == 'error' ? '❌ error' : '⚠️ warning'
+            def location = problem.line != null ? "${problem.file}:${problem.line}" : problem.file
+            report << "| ${severity} | `${location}` | ${cell(problem.message)} |\n"
+        }
+        return report.toString()
     }
 
     /** "<file>:<line>: <message>", without ":<line>" when the problem has no line */

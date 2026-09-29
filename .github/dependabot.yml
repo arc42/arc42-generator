@@ -1,0 +1,11 @@
+# Opens a pull request whenever arc42-template master has moved past the commit this
+# repository pins. The CI below builds that pull request, so a green check means the new
+# golden master passes the validation and converts into every format.
+version: 2
+updates:
+  - package-ecosystem: gitsubmodule
+    directory: /
+    schedule:
+      interval: daily
+    commit-message:
+      prefix: "Pin arc42-template"
