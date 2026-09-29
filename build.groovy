@@ -22,6 +22,7 @@
  *   groovy build.groovy --config=path/to/config.groovy   # Build another template (e.g. req42)
  *   groovy build.groovy --failure-level=error   # Fail only on Asciidoctor/Pandoc errors (default: warn)
  *   groovy build.groovy --lint=warn             # Report golden master problems but do not fail on them
+ *   groovy build.groovy --release-tag=2026.09.29   # Tag written to manifest.json (only set by make release)
  *
  * Every run starts from a clean output: the templates phase removes build/src_gen/, the convert
  * phase removes the output directories of the formats it converts.
@@ -51,6 +52,8 @@ def configPath = 'buildconfig.groovy'
 def failureLevel = 'warn'
 // Golden master validation problems fail the build unless --lint=warn is given
 def failOnLintErrors = true
+// Tag of the release the ZIPs are built for, written to manifest.json
+def releaseTag = null
 
 if (cliArgs) {
     targetPhase = cliArgs.find { !it.startsWith('--') } ?: 'all'
@@ -72,6 +75,10 @@ if (cliArgs) {
         }
     }
     failOnLintErrors = !cliArgs.contains('--lint=warn')
+    def releaseTagArg = cliArgs.find { it.startsWith('--release-tag=') }
+    if (releaseTagArg) {
+        releaseTag = releaseTagArg.substring('--release-tag='.length())
+    }
 }
 
 println """
@@ -185,6 +192,19 @@ if (sourceDateEpoch == null) {
 }
 converter.sourceDateEpoch = sourceDateEpoch
 packager.sourceDateEpoch = sourceDateEpoch
+
+// manifest.json names the golden master commit and, for a release, its tag
+packager.releaseTag = releaseTag
+try {
+    def goldenMasterDir = new File(projectRoot, config.goldenMaster.sourcePath.toString())
+    def git = ['git', '-C', goldenMasterDir.canonicalPath, 'rev-parse', 'HEAD'].execute()
+    def output = git.text.trim()
+    if (git.waitFor() == 0 && output ==~ /[0-9a-f]{40}/) {
+        packager.templateCommit = output
+    }
+} catch (Exception ignored) {
+    // no git or not a repository: the manifest has no templateCommit
+}
 
 // ============================================================================
 // Phase 1: Generate Templates from Golden Master
