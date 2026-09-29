@@ -221,6 +221,19 @@ image::sub/dir/other.png[]
     println "  reported: ${message.readLines()[0]}"
     println "✓ Test 8 passed\n"
 
+    println "=== Test 9: A feature used in ifdef but never set as attribute is an error ==="
+    resetFixture()
+    // without ':demohelp:' every ifdef::demohelp[] block is dropped, the with-help style equals plain
+    new File(fixture, 'DE/adoc/config.adoc').write("// no feature attribute\n", 'utf-8')
+    problems = templates.validateGoldenMaster()
+    assert problems.size() == 1, "expected exactly one problem, got: ${problems}"
+    problem = problems[0]
+    assert problem.severity == 'error' && problem.language == 'DE' && problem.line == null, "unexpected problem: ${problem}"
+    assert problem.file == 'DE', "the problem belongs to the language, got file ${problem.file}"
+    assert problem.message.contains(':demohelp:') && problem.message.contains('with-help'), "unexpected message: ${problem.message}"
+    println "  reported: ${templates.formatProblem(problem)}"
+    println "✓ Test 9 passed\n"
+
     println "=== All Tests Passed! ==="
     System.exit(0)
 

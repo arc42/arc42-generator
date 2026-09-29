@@ -166,6 +166,9 @@ class Templates {
      * - error:   the numbers of [role="<prefix><feature>"] and ifdef::<prefix><feature>[]
      *            lines in a file differ (a feature block that is not wrapped in its conditional)
      * - error:   an image::target[] or image:target[] whose target is not in <LANG>/images/
+     * - error:   a language uses ifdef::<prefix><feature>[] for a feature that a style keeps,
+     *            but none of its documents sets the attribute :<prefix><feature>: (the style
+     *            would silently lose every block of that feature)
      * - error:   version.properties is missing or lacks revnumber, revdate or revremark
      * - warning: the chapter files (adoc/*.adoc) differ from those of the EN language
      * - warning: a chapter has a different number of feature blocks than its EN counterpart
@@ -187,15 +190,21 @@ class Templates {
             def languageDir = new File(sourceRoot, language)
             def imagesDir = new File(languageDir, 'images')
 
+            def scans = []
             def mainDocument = new File(languageDir, "${config.project.name}.adoc")
             if (mainDocument.isFile()) {
-                problems.addAll(lintDocument(scanDocument(mainDocument), language, language + '/' + mainDocument.name, imagesDir))
+                def scan = scanDocument(mainDocument)
+                scans << scan
+                problems.addAll(lintDocument(scan, language, language + '/' + mainDocument.name, imagesDir))
             }
 
             def chapters = scanChapters(languageDir)
             chapters.each { name, scan ->
+                scans << scan
                 problems.addAll(lintDocument(scan, language, language + '/adoc/' + name, imagesDir))
             }
+
+            problems.addAll(lintFeatureAttributes(scans, language))
 
             problems.addAll(lintVersionProperties(languageDir, language))
 
@@ -241,10 +250,12 @@ class Templates {
      */
     private Map scanDocument(File file) {
         def prefix = config.project.featurePrefix
-        def markers = [:]       // feature -> [ifdef: [lines], endif: [lines], role: [lines]]
+        def markers = [:]       // feature -> [ifdef: [lines], endif: [lines], role: [lines], define: [lines]]
         def markerLines = [:]   // marker line (trimmed) -> [feature, kind]
+        def definitions = [:]   // attribute definition pattern (':<prefix><feature>:' with optional value) -> feature
         config.goldenMaster.allFeatures.each { feature ->
-            markers[feature] = [ifdef: [], endif: [], role: []]
+            markers[feature] = [ifdef: [], endif: [], role: [], define: []]
+            definitions[Pattern.compile("^:${Pattern.quote(prefix + feature)}:(\\s.*)?\$")] = feature
             markerLines["ifdef::${prefix}${feature}[]".toString()] = [feature, 'ifdef']
             markerLines["endif::${prefix}${feature}[]".toString()] = [feature, 'endif']
             markerLines["[role=\"${prefix}${feature}\"]".toString()] = [feature, 'role']
@@ -255,8 +266,11 @@ class Templates {
         lines.eachWithIndex { line, index ->
             def trimmed = line.trim()
             def marker = markerLines[trimmed]
+            def defined = definitions.find { pattern, feature -> pattern.matcher(trimmed).matches() }
             if (marker) {
                 markers[marker[0]][marker[1]] << index + 1
+            } else if (defined) {
+                markers[defined.value].define << index + 1
             } else if (!trimmed.startsWith('//')) {   // comment lines are not rendered
                 def matcher = IMAGE_MACRO.matcher(line)
                 while (matcher.find()) {
@@ -311,6 +325,28 @@ class Templates {
             }
         }
 
+        return problems
+    }
+
+    /**
+     * A feature that a style keeps and that the language uses in ifdef::<prefix><feature>[]
+     * must be set as attribute (usually in adoc/config.adoc) by one of the language's documents
+     */
+    private List<Map> lintFeatureAttributes(List<Map> scans, String language) {
+        def prefix = config.project.featurePrefix
+        def problems = []
+        config.goldenMaster.templateStyles.each { style, features ->
+            features.each { feature ->
+                def used = scans.any { it.markers[feature]?.ifdef }
+                def defined = scans.any { it.markers[feature]?.define }
+                if (used && !defined && !problems.any { it.feature == feature }) {
+                    def styles = config.goldenMaster.templateStyles.findAll { it.value.contains(feature) }.keySet()
+                    problems << [severity: 'error', language: language, file: language, line: null, feature: feature,
+                        message: "ifdef::${prefix}${feature}[] is used, but no document sets :${prefix}${feature}: " +
+                            "(e.g. in adoc/config.adoc); the ${styles.join(', ')} style(s) would lose every ${feature} block"]
+                }
+            }
+        }
         return problems
     }
 
