@@ -11,114 +11,109 @@ The content (structure + embedded-help) of the arc42 template are maintained in 
 
 == How to Build
 
-
 This repository contains a Groovy-based build system that generates arc42 templates in multiple formats and languages from the Golden Master source.
 
-**IMPORTANT: Docker is the only supported build approach.** All dependencies (Java, Groovy, Pandoc, cmark) are pre-configured in the Docker container.
-
->In theory it will be possible to run the build locally without Docker, but this is not supported and may lead to unexpected issues.
-
+**Everything runs through `make`, and every target runs in Docker.** Java, Groovy, Pandoc and cmark live in the Docker image; nothing else is installed on your machine. `make help` lists all targets and variables.
 
 === Prerequisites
 
-* https://www.docker.com/[Docker] and Docker Compose installed
-* Git (to clone the repository with submodules)
+* `make`
+* https://www.docker.com/[Docker] with Compose v2
+* Git, to clone the repository (and for `make pin` and `make release`, which commit and push with your identity)
 
 === Quick Start
 
-1. Clone this repository including submodules:
-+
 ----
-git clone --recurse-submodules git@github.com:arc42/arc42-generator.git
+git clone --recurse-submodules https://github.com/arc42/arc42-generator.git
 cd arc42-generator
+make image      # build the Docker image once (Java, Groovy, Pandoc 3.7.0.2, cmark)
+make build      # full arc42 build
+make test       # all test scripts
 ----
 
-2. Run the build (the `make` targets wrap Docker Compose; `make help` lists them):
-+
-----
-make build      # full build; the same as: docker compose up
-make test       # all test scripts in the container
-----
-+
-The build will:
+`make build`:
 
-* Check out the arc42-template submodule (Golden Master) at the commit recorded in this repository
-* Validate the Golden Master (conditionals, help blocks, images, version.properties) and stop on errors
-* Generate templates in all supported languages and flavors
-* Convert to 17 output formats (HTML, Markdown variants, DOCX, EPUB, LaTeX, reStructuredText, Textile, DocBook, AsciiDoc)
-* Stop on Asciidoctor or Pandoc diagnostics (missing includes, missing images, ...)
-* Validate CommonMark markdown and image references
-* Create distribution ZIP files in `arc42-template/dist/`
+* checks out the arc42-template submodule (Golden Master) at the commit recorded in this repository,
+* validates the Golden Master (conditionals, help blocks, the `arc42help` attribute, images, version.properties) and stops on errors,
+* generates the templates in all languages and styles and converts them to 17 output formats (HTML, Markdown variants, DOCX, EPUB, LaTeX, reStructuredText, Textile, DocBook, AsciiDoc), stopping on Asciidoctor or Pandoc diagnostics,
+* creates the distribution ZIPs in `arc42-template/dist/`,
+* validates the output: the Markdown with `cmark` (warnings only) and the images of the with-help styles (fails the build).
 
 Every run starts from a clean `build/` output, so nothing from an earlier run ends up in the ZIPs. The output is reproducible: unchanged content produces byte-identical files and ZIPs (timestamps come from `SOURCE_DATE_EPOCH` or the last commit of the Golden Master, not from the build time; every EPUB gets a fixed identifier derived from project, language and style instead of a random one).
 
-Results are written to the local `build/` directory.
+=== Make Targets
 
+[cols="1,3",options="header"]
+|===
+| Target | What it does
 
-=== Building in GitHub Codespaces
+2+| *Build arc42*
+| `make build` | Full build: check out arc42-template, all phases, validate the output
+| `make generate` | All phases (templates, convert, distribution) without checkout and output validation
+| `make templates` | Phase 1: validate the Golden Master, generate the templates into `build/src_gen/`
+| `make convert` | Phases 2-3: discover and convert the templates
+| `make distribution` | Phase 4: create the distribution ZIPs
+| `make validate` | Validate the output: Markdown with `cmark` (warnings only), images of the with-help styles (fails)
 
-Docker is the recommended approach even in GitHub Codespaces:
+2+| *Tests*
+| `make test` | All test scripts
+| `make test-<name>` | One test script: `templates`, `discovery`, `converter`, `config`, `lint`
 
-----
-docker compose up
-----
+2+| *Golden Master (arc42-template submodule)*
+| `make template-checkout` | Check out arc42-template at the recorded commit (local changes are kept; the target stops instead)
+| `make template-update` | Move arc42-template to the newest master, for a build of the latest translations
+| `make pin` | Record the checked-out arc42-template commit in this repository (a git commit on the current branch)
 
-The container handles all Git ownership issues automatically, so you don't need to install any local dependencies.
+2+| *Release*
+| `make release` | Full build, then commit the regenerated ZIPs to a new branch `dist/<date>-<commit>` of arc42-template and push it; open the pull request from the printed link. Stops if the recorded template commit is not the newest master.
 
-=== Advanced Build Options
+2+| *Docker image and tools*
+| `make image` | Build the Docker image; rerun after changing the `Dockerfile`
+| `make image-fresh` | Rebuild the image without cache
+| `make versions` | Show the tool versions inside the image
+| `make shell` | Interactive shell in the container; the make targets work there as well
 
-To rebuild the Docker image from scratch:
+2+| *Cleanup*
+| `make clean` | Remove `build/` and `build2/` (the ZIPs are kept)
+| `make clean-dist` | Discard regenerated ZIPs in `arc42-template/dist/` and restore the committed ones
+| `make fix-owner` | Linux: give files created by the container (root) back to the calling user; the targets do this automatically
+|===
 
-----
-docker compose build --no-cache
-----
-
-Individual phases, tests and other templates through `make` (each target runs in the container; nothing but `make` and Docker is needed locally, and the output is written below the current directory):
-
-----
-make help                                   # all targets
-make templates                              # phase 1
-make convert FORMAT=html                    # phases 2-3, one format
-make generate OPTS="--lint=warn"            # all phases of build.groovy, options passed through
-make test                                   # all test scripts
-make generate TEMPLATE=../req42-framework   # another template repository, from its buildconfig.groovy
-make shell                                  # interactive shell in the container
-make clean                                  # remove build/ (the ZIPs are kept)
-----
-
-On Linux the container runs as root, so the targets hand the output back to the calling user afterwards (`make fix-owner`). The underlying commands, for running them by hand:
-
-----
-# Start an interactive shell in the container
-docker compose run --rm arc42-builder /bin/bash
-
-# Then run individual phases
-groovy build.groovy templates      # Generate templates only
-groovy build.groovy convert        # Convert to output formats
-groovy build.groovy distribution   # Create distribution ZIPs
-
-# Options
-groovy build.groovy convert --format=html          # one format only
-groovy build.groovy --failure-level=error          # fail only on errors, not on warnings (default: warn)
-groovy build.groovy templates --lint=warn          # report Golden Master problems without failing
-groovy build.groovy --parallel=false               # sequential conversion
-----
-
-To build the newest Golden Master instead of the recorded submodule commit, run `docker compose run --rm arc42-builder ./build-arc42.sh --update-template` (or `UPDATE_TEMPLATE=1 docker compose up`) and then pin the new commit in this repository with `git add arc42-template && git commit`. Local changes inside the submodule are never deleted; the build stops instead of moving the submodule over them. `./build-arc42.sh --help` lists the options and exit codes (0 success, 1 build or image validation failed, 2 invalid option).
-
-=== Running Without Docker (Gradle Wrapper)
-
-If neither Docker nor Groovy is installed, the Gradle wrapper runs the same Groovy scripts with their dependencies resolved by Gradle. Only a JDK (11 or newer) and Pandoc 3.x are needed:
+Variables:
 
 ----
-./gradlew check                                   # all test scripts
-./gradlew templates                               # phase 1: validate the Golden Master, generate templates
-./gradlew convert -Popts="--format=html"          # phases 2-3; options for build.groovy go into -Popts
-./gradlew generate                                # all phases, including the distribution ZIPs
-./gradlew templates convert -Popts="--lint=warn --failure-level=error"
+make convert FORMAT=html                       # one format only
+make templates OPTS="--lint=warn"              # report Golden Master problems without failing
+make convert OPTS="--failure-level=error"      # fail only on errors, not on warnings (default: warn; also fatal, none)
+make generate OPTS="--parallel=false"          # sequential conversion
+make build UPDATE_TEMPLATE=1                   # build the newest arc42-template master instead of the recorded commit
+make generate TEMPLATE=../req42-framework      # another template repository, see below
+SOURCE_DATE_EPOCH=1751846400 make generate     # fixed timestamp for DOCX/EPUB/ZIP entries
 ----
 
-`build.gradle` contains no build logic. It only launches `build.groovy` and the test scripts; the Docker image remains the supported build path.
+`docker compose up` runs `make build` inside the container, for example in GitHub Codespaces.
+
+=== Working on the Golden Master
+
+Template content, including new translations, is developed in https://github.com/arc42/arc42-template[arc42-template]. Its CI validates every pull request with this generator and shows each problem as annotation on the file and line.
+
+This repository records the arc42-template commit it builds (the submodule "pin"), so the same generator commit always produces the same ZIPs. When arc42-template master moves, Dependabot opens a pull request here that moves the pin; the CI of this repository builds it. To try a template change locally:
+
+----
+make template-update          # newest arc42-template master (or: git -C arc42-template checkout <branch>)
+make generate                 # build what is checked out; 'make build' would go back to the recorded commit
+make pin                      # optional: record the commit, then open a pull request
+----
+
+A new language only needs its directory in arc42-template: `<LANG>/` with a code such as `TR`, optionally with a region such as `ZH-TW`.
+
+=== Publishing the Distribution ZIPs
+
+----
+make release
+----
+
+builds everything and pushes the regenerated ZIPs of `arc42-template/dist/` to a new branch of arc42-template; merging the pull request publishes them. `make clean-dist` discards regenerated ZIPs you do not want to release.
 
 === Building Other Templates (e.g. req42)
 
@@ -132,28 +127,26 @@ The generator is not tied to arc42. Everything project-specific lives in the con
 `buildconfig.groovy` holds the arc42 values. Another template keeps a complete copy of this file (all sections) in its own repository and follows the layout of `arc42-template`: `<LANG>/<name>.adoc`, `<LANG>/adoc/`, `<LANG>/images/` and `<LANG>/version.properties`.
 Paths in a config file are relative to the directory of that file, including the `build/` output.
 
-Mount the template repository into the container and pass its config:
+`TEMPLATE` mounts the template repository into the container and uses its config; the output is written below that repository:
 
 ----
-docker compose run --rm -v /path/to/req42-framework:/project arc42-builder \
-  groovy build.groovy --config=/project/buildconfig.groovy
+make templates TEMPLATE=../req42-framework
+make generate TEMPLATE=../req42-framework
+make validate TEMPLATE=../req42-framework
 ----
 
 === Testing the Generator
 
-See link:docs/TESTING.md[docs/TESTING.md] for a step-by-step guide (Docker only): self-tests, the arc42 build, building another template such as req42, and what output to expect.
+See link:docs/TESTING.md[docs/TESTING.md] for a step-by-step guide: self-tests, the arc42 build, building another template such as req42, and what output to expect.
 
 === Build Validation
 
-The build fails on problems in the sources and in the conversion:
+The build fails on problems in the sources, in the conversion and in the output:
 
-* **Golden Master lint** (before generation): unbalanced `ifdef::arc42help[]`/`endif::arc42help[]`, help blocks that are not wrapped in a conditional, a language that uses `ifdef::arc42help[]` but never sets `:arc42help:` (its with-help template would lose all help text), image references without a file in `<LANG>/images/`, and incomplete `version.properties` are errors; a chapter set or help-block count that differs from EN is a warning. Use `--lint=warn` to report instead of fail.
+* **Golden Master lint** (before generation): unbalanced `ifdef::arc42help[]`/`endif::arc42help[]`, help blocks that are not wrapped in a conditional, a language that uses `ifdef::arc42help[]` but never sets `:arc42help:` (its with-help template would lose all help text), image references without a file in `<LANG>/images/`, and incomplete `version.properties` are errors; a chapter set or help-block count that differs from EN is a warning. Use `OPTS=--lint=warn` to report instead of fail.
 * **Diagnostics** (after conversion): Asciidoctor log records (e.g. a missing include) and Pandoc warnings (e.g. an image it could not embed into DOCX or EPUB) are printed with file and line. Records at `--failure-level` (default `warn`) or above fail the build.
 * **Clean output**: the output directories of a phase are deleted before the phase runs.
-
-`build-arc42.sh` additionally validates the generated Markdown with `cmark` (non-fatal, skipped with a notice when `cmark` is not installed) and the images of the with-help flavors: the `images/` directories of markdown, asciidoc, textile, rst and html must exist and be non-empty, and every image reference in the with-help Markdown must resolve to a file. Image findings are fatal: all of them are printed, then the script exits with 1.
-
-
+* **Output validation** (`make validate`, part of `make build`): the Markdown is checked with `cmark` (warnings only); for the with-help styles the `images/` directories of markdown, asciidoc, textile, rst and html must exist and be non-empty, and every image reference in the with-help Markdown must resolve to a file. All image findings are printed, then the build fails.
 
 === Docker Image Details
 
@@ -162,7 +155,7 @@ The Docker image is optimized for size and build speed:
 * **Multi-stage build**: Separates build-time and runtime dependencies
 * **Cached dependencies**: Groovy Grape cache pre-populated during image build
 * **Minimal runtime**: Alpine Linux 3.20 with only essential tools
-* **Pinned converter**: Pandoc 3.7.0.2 from the official GitHub release (static binary, SHA-256 verified), the same version `build-arc42.sh` installs outside Docker
+* **Pinned converter**: Pandoc 3.7.0.2 from the official GitHub release (static binary, SHA-256 verified)
 * **Image size**: not re-measured since the pandoc change (the static pandoc binary is about 160 MB on amd64)
 
 The container includes:
@@ -171,10 +164,8 @@ The container includes:
 * Groovy 5.0.3
 * Pandoc 3.7.0.2 (document converter, pinned release binary with checksum)
 * cmark (CommonMark validator)
+* GNU make and git
 * AsciidoctorJ 2.5.10 (AsciiDoc processor, bundles Asciidoctor 2.0.20)
-
-
-**No local installation of Java, Groovy, or Pandoc is required or supported.**
 
 
 [[generator-requirements]]

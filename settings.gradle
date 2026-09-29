@@ -1,2 +1,0 @@
-// Optional Gradle runner for the Groovy build scripts, see build.gradle
-rootProject.name = 'arc42-generator'

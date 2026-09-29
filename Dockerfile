@@ -11,8 +11,7 @@ FROM alpine:3.20 AS builder
 # - cmark: CommonMark markdown validator
 # pandoc is deliberately NOT taken from the Alpine repository (unpinned
 # version); it is installed below from the official GitHub release, pinned to
-# the same version that build-arc42.sh installs outside Docker and verified
-# against a SHA-256 checksum.
+# the same version everywhere, and verified against a SHA-256 checksum.
 RUN apk add --no-cache \
     openjdk21-jre-headless \
     bash \
@@ -89,6 +88,7 @@ RUN apk add --no-cache \
     openjdk21-jre-headless \
     bash \
     git \
+    make \
     cmark
 
 # Fix Git ownership for mounted volumes (Codespaces/CI environments)
@@ -108,12 +108,14 @@ COPY --from=builder /root/.groovy /root/.groovy
 ENV JAVA_HOME=/usr/lib/jvm/java-21-openjdk
 ENV GROOVY_HOME=/opt/groovy
 ENV PATH="${GROOVY_HOME}/bin:${JAVA_HOME}/bin:${PATH}"
+# The Makefile runs its targets directly instead of starting another container
+ENV ARC42_IN_CONTAINER=1
 
 WORKDIR /workspace
 
-# Copy only necessary project files (build scripts and source)
-COPY build.groovy buildconfig.groovy init-groovy-deps.groovy build-arc42.sh ./
+# Copy only necessary project files (Makefile and generator source)
+COPY Makefile build.groovy buildconfig.groovy init-groovy-deps.groovy ./
 COPY lib/ ./lib/
 
-# Default command: run the build script
-CMD ["/bin/bash", "./build-arc42.sh"]
+# Default command: the full arc42 build
+CMD ["make", "build"]
