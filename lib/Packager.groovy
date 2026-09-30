@@ -15,7 +15,7 @@ import java.security.MessageDigest
  * Responsibilities:
  * - Create ZIP distributions for each (language, style, format) combination
  * - Package converted templates for distribution
- * - Copy ZIPs to distribution directory (arc42-template/dist/)
+ * - Copy ZIPs to the distribution directory (distribution.targetPath, build/dist/ for arc42)
  * - Write manifest.json next to the ZIPs: languages, styles, formats and every ZIP with its sha256
  */
 
@@ -220,13 +220,21 @@ class Packager {
      * release would rewrite all ZIPs again. First-parent history: the merge commit on master counts,
      * not a commit of the merged branch.
      */
+    /**
+     * Folders of the golden master that hold release output rather than template content: arc42-template
+     * committed its ZIPs to dist/ until the downloads moved to GitHub Releases (arc42-template#248).
+     */
+    static final List<String> RELEASE_OUTPUT_PATHS = ['dist']
+
     Map lastTemplateCommit() {
         def goldenMasterDir = new File(projectRoot, config.goldenMaster.sourcePath.toString()).canonicalFile
         def distDir = new File(projectRoot, config.distribution.targetPath.toString()).canonicalFile
         def cmd = ['git', '-C', goldenMasterDir.path, 'log', '-1', '--first-parent', '--format=%H %ct', '--', '.']
+        def excluded = RELEASE_OUTPUT_PATHS as Set
         if (distDir.path.startsWith(goldenMasterDir.path + File.separator)) {
-            cmd << ":(exclude)${goldenMasterDir.toPath().relativize(distDir.toPath())}".toString()
+            excluded << goldenMasterDir.toPath().relativize(distDir.toPath()).toString()
         }
+        excluded.sort().each { cmd << ":(exclude)${it}".toString() }
         try {
             def git = cmd.execute()
             def output = git.text.trim()

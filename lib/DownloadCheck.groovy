@@ -16,7 +16,7 @@ import java.time.Duration
  * Requests <prefix><name> for every file listed in manifest.json (every language, style and
  * format of a release), following redirects. Without checksums a HEAD request per file; with
  * checksums every file is downloaded and its SHA-256 compared with the manifest. Used before and
- * after switching the download page to GitHub Releases: the old prefix (raw/master/dist/) and the
+ * after switching the download page to GitHub Releases: the site prefix (arc42.org/dl/) and the
  * new one (releases/download/<tag>/ or releases/latest/download/) must serve the same files.
  */
 class DownloadCheck {
@@ -27,6 +27,10 @@ class DownloadCheck {
         .build()
 
     int poolSize = 8
+
+    /** Retries after HTTP 429 (rate limit) or 5xx; the wait doubles from retryDelayMillis unless Retry-After says otherwise. */
+    int maxRetries = 4
+    long retryDelayMillis = 2000
 
     /** The file names of the manifest, with their sha256; manifest.json itself is not in its list. */
     static List<Map> manifestFiles(File manifestFile) {
@@ -47,15 +51,27 @@ class DownloadCheck {
     }
 
     Map checkOne(Map file, String url, boolean checksums) {
-        def result = [name: file.name, url: url, ok: false, problem: null]
+        Map result = null
+        for (int attempt = 0; attempt <= maxRetries; attempt++) {
+            result = checkOnce(file, url, checksums)
+            if (!(result.status == 429 || result.status >= 500) || attempt == maxRetries) break
+            long wait = result.retryAfter != null ? result.retryAfter * 1000L : retryDelayMillis * (1L << attempt)
+            Thread.sleep(wait)
+        }
+        result.remove('status')
+        result.remove('retryAfter')
+        return result
+    }
+
+    Map checkOnce(Map file, String url, boolean checksums) {
+        def result = [name: file.name, url: url, ok: false, problem: null, status: 0, retryAfter: null]
         try {
             def builder = HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(120))
             if (checksums) {
                 def response = client.send(builder.GET().build(), HttpResponse.BodyHandlers.ofInputStream())
                 if (response.statusCode() != 200) {
                     response.body().close()
-                    result.problem = "HTTP ${response.statusCode()}"
-                    return result
+                    return failed(result, response)
                 }
                 def digest = MessageDigest.getInstance('SHA-256')
                 response.body().withCloseable { stream ->
@@ -72,14 +88,21 @@ class DownloadCheck {
                 def response = client.send(builder.method('HEAD', HttpRequest.BodyPublishers.noBody()).build(),
                     HttpResponse.BodyHandlers.discarding())
                 if (response.statusCode() != 200) {
-                    result.problem = "HTTP ${response.statusCode()}"
-                    return result
+                    return failed(result, response)
                 }
             }
             result.ok = true
         } catch (Exception e) {
             result.problem = "${e.class.simpleName}: ${e.message}"
         }
+        return result
+    }
+
+    private static Map failed(Map result, HttpResponse response) {
+        result.status = response.statusCode()
+        result.problem = "HTTP ${response.statusCode()}"
+        def retryAfter = response.headers().firstValue('Retry-After').orElse(null)
+        if (retryAfter?.isInteger()) result.retryAfter = Math.min(retryAfter.toInteger(), 60)
         return result
     }
 }

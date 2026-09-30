@@ -28,6 +28,16 @@ server.createContext('/files/') { ex ->
     if (ex.requestMethod != 'HEAD') ex.responseBody.write(body)
     ex.close()
 }
+def throttled = [:].asSynchronized()   // the first two requests per file get 429, like GitHub's rate limit
+server.createContext('/throttled/') { ex ->
+    def name = ex.requestURI.path.substring('/throttled/'.length())
+    int n = (throttled[name] ?: 0) + 1
+    throttled[name] = n
+    if (n <= 2) { ex.responseHeaders.add('Retry-After', '0'); ex.sendResponseHeaders(429, -1); ex.close(); return }
+    ex.responseHeaders.add('Location', '/files/' + name)
+    ex.sendResponseHeaders(302, -1)
+    ex.close()
+}
 server.createContext('/latest/') { ex ->    // like releases/latest/download/: a redirect to the file
     ex.responseHeaders.add('Location', '/files/' + ex.requestURI.path.substring('/latest/'.length()))
     ex.sendResponseHeaders(302, -1)
@@ -62,10 +72,23 @@ try {
     assert results.find { it.name == 'c.zip' }.problem == 'HTTP 404'
     println "✓ Test 3 passed\n"
 
-    println "=== Test 4: an unreachable host is a problem, not a crash ==="
+    println "=== Test 4: HTTP 429 is retried ==="
+    checker.retryDelayMillis = 10
+    def retried = checker.check(manifestFiles.take(1), base + '/throttled/', true)
+    assert retried[0].ok, "a.zip succeeds on the third attempt: ${retried}"
+    assert throttled['a.zip'] == 3, "two 429 and one success: ${throttled}"
+    assert retried[0].keySet() == ['name', 'url', 'ok', 'problem'] as Set, "no internal fields in the result: ${retried[0]}"
+    checker.maxRetries = 1
+    throttled.clear()
+    def givenUp = checker.check(manifestFiles.take(1), base + '/throttled/', false)
+    assert givenUp[0].problem == 'HTTP 429', "gives up after maxRetries: ${givenUp}"
+    checker.maxRetries = 4
+    println "✓ Test 4 passed\n"
+
+    println "=== Test 5: an unreachable host is a problem, not a crash ==="
     def unreachable = checker.check(manifestFiles.take(1), 'http://127.0.0.1:1/', false)
     assert !unreachable[0].ok && unreachable[0].problem
-    println "✓ Test 4 passed\n"
+    println "✓ Test 5 passed\n"
 
     println "=== All Tests Passed! ==="
     server.stop(0)

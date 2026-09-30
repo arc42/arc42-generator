@@ -48,7 +48,7 @@ formats = [
 ]
 
 distribution {
-    targetPath = "arc42-template/dist/"
+    targetPath = "build/dist/"   // published as GitHub Release by make release, not committed
 
     // language names for manifest.json; a language without an entry is listed by its code
     languageNames = [
