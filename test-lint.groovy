@@ -86,7 +86,7 @@ ${helpBlock('HELP TWO B')}
 CHAPTER TWO CONTENT
 """, 'utf-8')
 
-        new File(fixture, "${lang}/version.properties").write("revnumber=1.0-${lang}\nrevdate=2026\nrevremark=(test)\n", 'utf-8')
+        new File(fixture, "${lang}/version.properties").write("revnumber=1.0-${lang}\nrevdate=2026\nrevdate-iso=2026-01\nrevremark=(test)\n", 'utf-8')
         new File(fixture, "${lang}/images/demo-logo.png").bytes = [1, 2, 3] as byte[]
         new File(fixture, "${lang}/images/example.png").bytes = [4, 5, 6] as byte[]
     }
@@ -154,7 +154,7 @@ image::sub/dir/other.png[]
 
     println "=== Test 5: version.properties must exist and be complete ==="
     resetFixture()
-    new File(fixture, 'EN/version.properties').write("revnumber=1.0-EN\nrevremark=(test)\n", 'utf-8')
+    new File(fixture, 'EN/version.properties').write("revnumber=1.0-EN\nrevdate-iso=2026-01\nrevremark=(test)\n", 'utf-8')
     assert new File(fixture, 'DE/version.properties').delete()
     problems = templates.validateGoldenMaster()
     assert problems.size() == 2 && problems.every { it.severity == 'error' && it.line == null }, "two errors without line expected, got: ${problems}"
@@ -206,7 +206,7 @@ image::sub/dir/other.png[]
     println "=== Test 8: By default lint errors fail the template generation ==="
     resetFixture()
     new File(fixture, 'EN/adoc/01_chapter.adoc').append('image::missing.png[]\n', 'utf-8')
-    new File(fixture, 'DE/version.properties').write("revnumber=1.0-DE\n", 'utf-8')
+    new File(fixture, 'DE/version.properties').write("revnumber=1.0-DE\nrevdate-iso=2026-01\n", 'utf-8')
     def message = null
     try {
         newTemplates().createFromGoldenMaster()
@@ -220,6 +220,19 @@ image::sub/dir/other.png[]
     assert !new File(fixture, 'build/src_gen').exists(), "nothing should be generated when the lint fails"
     println "  reported: ${message.readLines()[0]}"
     println "✓ Test 8 passed\n"
+
+    println "=== Test 8b: revdate-iso: missing is a warning, not a month (YYYY-MM) is an error ==="
+    resetFixture()
+    new File(fixture, 'EN/version.properties').write("revnumber=1.0-EN\nrevdate=2026\nrevremark=(test)\n", 'utf-8')
+    new File(fixture, 'DE/version.properties').write("revnumber=1.0-DE\nrevdate=2026\nrevdate-iso=2026-13\nrevremark=(test)\n", 'utf-8')
+    problems = templates.validateGoldenMaster()
+    def enIso = problems.find { it.file == 'EN/version.properties' }
+    def deIso = problems.find { it.file == 'DE/version.properties' }
+    assert problems.size() == 2, "one problem each for EN and DE: ${problems}"
+    assert enIso.severity == 'warning' && enIso.message.contains('no revdate-iso'), "missing revdate-iso is a warning: ${enIso}"
+    assert deIso.severity == 'error' && deIso.message.contains("found '2026-13'"), "a month 13 is an error: ${deIso}"
+    problems.each { println "  reported: ${templates.formatProblem(it)}" }
+    println "✓ Test 8b passed\n"
 
     println "=== Test 9: A feature used in ifdef but never set as attribute is an error ==="
     resetFixture()

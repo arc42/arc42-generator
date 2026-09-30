@@ -263,8 +263,12 @@ class Packager {
         def languages = packaged*.template.unique { it.language }.sort { it.language }.collect { t ->
             def revnumber = t.versionProperties?.revnumber ?: ''
             def version = (revnumber =~ /^\d+(\.\d+)*/).with { it.find() ? it.group() : revnumber }
-            [code: t.language, name: languageNames[t.language] ?: t.language,
-             version: version, date: t.versionProperties?.revdate ?: '']
+            def entry = [code: t.language, name: languageNames[t.language] ?: t.language,
+                         version: version, date: t.versionProperties?.revdate ?: '']
+            // machine-readable month next to the localised revdate, only when version.properties has it
+            def isoDate = t.versionProperties?.get('revdate-iso')?.toString()?.trim()
+            if (isoDate ==~ /\d{4}-(0[1-9]|1[0-2])/) entry.isoDate = isoDate
+            entry
         }
         def styles = packaged.collect { styleShort(it.template.style) }.unique().sort()
         def formats = packaged*.format.unique().sort { formatOrder.indexOf(it) }.collect { id ->
