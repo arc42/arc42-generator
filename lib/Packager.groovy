@@ -206,6 +206,10 @@ class Packager {
             println "Distribution files: ${distPath}"
             def manifest = writeManifest(packaged)
             println "Manifest: ${manifest.name} (${packaged.size()} files)"
+            if (releaseTag) {
+                def notes = writeReleaseInfo(manifest)
+                println "Release notes and file list: ${notes.parentFile.path}"
+            }
         }
     }
 
@@ -278,6 +282,35 @@ class Packager {
         def manifestFile = new File(new File(projectRoot, config.distribution.targetPath), 'manifest.json')
         manifestFile.write(JsonOutput.prettyPrint(json, true) + '\n', 'utf-8')
         return manifestFile
+    }
+
+    /**
+     * For a release (releaseTag set): write build/release/notes.md, the release notes (one line per
+     * language with name, version and date, plus the template commit), and build/release/files.txt,
+     * the files to upload: every ZIP of the manifest and the manifest itself, one name per line.
+     * Hand-made files in the distribution directory are not part of it.
+     *
+     * @return The release notes file
+     */
+    File writeReleaseInfo(File manifestFile) {
+        def manifest = new groovy.json.JsonSlurper().parse(manifestFile, 'utf-8')
+        def dir = new File(projectRoot, 'build/release')
+        dir.mkdirs()
+
+        def commit = manifest.templateCommit ? " from ${manifest.project} commit ${manifest.templateCommit.take(7)}" : ''
+        def date = manifest.templateDate ? " (${manifest.templateDate})" : ''
+        def notes = new StringBuilder()
+        notes << "Built${commit}${date}.\n\n"
+        notes << "| Language | Version | Date |\n|---|---|---|\n"
+        manifest.languages.each { l -> notes << "| ${l.name} (${l.code}) | ${l.version} | ${l.date} |\n" }
+        notes << "\n${manifest.formats.size()} formats: ${manifest.formats*.label.join(', ')}.\n"
+        notes << "${manifest.files.size()} files, one per language, style (${manifest.styles.join(', ')}) and format; "
+        notes << "sizes and SHA-256 checksums in `manifest.json`.\n"
+        def notesFile = new File(dir, 'notes.md')
+        notesFile.write(notes.toString(), 'utf-8')
+
+        new File(dir, 'files.txt').write((manifest.files*.name + manifestFile.name).join('\n') + '\n', 'utf-8')
+        return notesFile
     }
 
     /** Style as it appears in file names: 'with-help' becomes 'withhelp'. */

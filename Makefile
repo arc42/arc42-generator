@@ -1,6 +1,7 @@
 # arc42 generator: every task is a make target, and every target runs in Docker.
 # Needed locally: make and Docker with Compose v2. Only 'pin' and 'release' use your local git,
-# because they commit (and push) with your identity and credentials.
+# because they commit (and push) with your identity and credentials; 'release' and 'release-tools'
+# also need the GitHub CLI gh (logged in), which is not part of the image.
 #
 # The repository is bind-mounted into the container, so all output lands below the current
 # directory: build/ (converted templates) and arc42-template/dist/ (distribution ZIPs).
@@ -14,7 +15,8 @@
 #   make convert FORMAT=html                     one format only
 #   make templates OPTS="--lint=warn"            options for build.groovy
 #   make generate TEMPLATE=../req42-framework    another template repository (its own buildconfig.groovy)
-#   make release                                 build and push the regenerated ZIPs to a branch of arc42-template
+#   make release                                 build, push the regenerated ZIPs to a branch of arc42-template, publish a GitHub Release
+#   make release REPO=you/arc42-template PRERELEASE=1   the same as pre-release on a fork (for tests)
 
 SHELL := /bin/bash
 .DEFAULT_GOAL := help
@@ -26,6 +28,12 @@ DOCKER_RUN_OPTS ?=
 FORMAT ?=
 TEMPLATE ?=
 UPDATE_TEMPLATE ?=
+# release (host only, needs the GitHub CLI gh): tag, repository, pre-release, tag of the tools release
+TAG ?= $(shell date +%Y.%m.%d)
+REPO ?= arc42/arc42-template
+PRERELEASE ?=
+TOOLS_TAG ?=
+PRERELEASE_ON := $(filter 1 true yes,$(PRERELEASE))
 
 SUBMODULE := arc42-template
 
@@ -64,8 +72,8 @@ TEST_SCRIPTS := $(patsubst test-%.groovy,%,$(wildcard test-*.groovy))
 .PHONY: help image image-fresh versions shell \
         build generate templates convert distribution validate \
         test check \
-        template-checkout template-update pin release \
-        clean clean-dist fix-owner host-only _validate-markdown _validate-images
+        template-checkout template-update pin release release-tools \
+        clean clean-dist fix-owner host-only _gh-check _validate-markdown _validate-images
 
 ##@ Help
 
@@ -83,6 +91,10 @@ help: ## Show this help
 	@echo "  TEMPLATE=path      another template repository with its own buildconfig.groovy (not for build, release)"
 	@echo "  UPDATE_TEMPLATE=1  build: use the newest arc42-template master instead of the recorded commit"
 	@echo "  SOURCE_DATE_EPOCH  fixed timestamp for DOCX/EPUB/ZIP entries (default: last golden master commit outside dist/)"
+	@echo "  TAG=2026.09.30     release: tag of the GitHub Release (default: today; a second one: TAG=YYYY.MM.DD.2)"
+	@echo "  REPO=owner/repo    release, release-tools: repository of the release (default: arc42/arc42-template)"
+	@echo "  PRERELEASE=1       release: publish as pre-release (never becomes latest)"
+	@echo "  TOOLS_TAG=tools-YYYY.MM  release-tools: tag of the tools release"
 	@echo "  DOCKER_RUN_OPTS    extra options for docker compose run, e.g. -e GITHUB_ACTIONS=true (used by the CI of arc42-template)"
 	@echo
 	@echo "Test scripts: $(TEST_SCRIPTS)"
@@ -177,10 +189,13 @@ pin: host-only ## Record the checked-out arc42-template commit in this repositor
 
 ##@ Release
 
-release: host-only ## Build, then commit the regenerated ZIPs to a new branch of arc42-template and push it (uses your git)
+release: host-only _gh-check ## Build, push the regenerated ZIPs to a branch of arc42-template and publish them as GitHub Release (uses your git and gh)
 ifneq ($(TEMPLATE),)
 	$(error release is for arc42 only)
 endif
+	@if gh release view "$(TAG)" -R $(REPO) >/dev/null 2>&1 || gh api "repos/$(REPO)/git/ref/tags/$(TAG)" >/dev/null 2>&1; then \
+	  echo "✗ Tag $(TAG) exists on $(REPO). A second release on the same day: make release TAG=$(TAG).2" >&2; exit 1; \
+	fi
 	@git -C $(SUBMODULE) fetch -q origin master
 	@pinned=$$(git rev-parse HEAD:$(SUBMODULE)); \
 	if [ -n "$(filter 1 true yes,$(UPDATE_TEMPLATE))" ] || [ "$$pinned" = "$$(git -C $(SUBMODULE) rev-parse origin/master)" ]; then \
@@ -193,16 +208,54 @@ endif
 	fi
 	@# the same template content as recorded (or UPDATE_TEMPLATE): build from master, so that the
 	@# release branch starts from the current dist/ and ZIPs deleted there cannot come back
-	@$(MAKE) --no-print-directory build UPDATE_TEMPLATE=1
+	@$(MAKE) --no-print-directory build UPDATE_TEMPLATE=1 OPTS="$(strip $(OPTS) --release-tag=$(TAG))"
+	@# 1. dist/ branch (until arc42-template#248): only if a ZIP or the manifest (apart from its tag) changed
+	@# 2. GitHub Release with the ZIPs of the manifest and the manifest; skipped if nothing changed and
+	@#    the repository has a release already (a pre-release is always published)
 	@cd $(SUBMODULE) && \
-	if [ -z "$$(git status --porcelain -- dist)" ]; then \
-	  echo "✓ dist/ is unchanged: nothing to release"; exit 0; \
+	if [ -n "$$(git status --porcelain -- dist ':(exclude)dist/manifest.json')" ] || \
+	   ! git diff --quiet -I '"tag": ' -- dist/manifest.json; then \
+	  branch="dist/$(TAG)"; \
+	  git switch -q -c "$$branch" && git add -A dist && \
+	  git commit -q -m "Update the distribution ZIPs for release $(TAG) (generated from $$(git rev-parse --short HEAD))" && \
+	  git push -q "https://github.com/$(REPO).git" "$$branch" && \
+	  echo "✓ Pushed $$branch to $(REPO). Open a pull request: https://github.com/$(REPO)/compare/$$branch?expand=1" || exit 1; \
+	elif [ -z "$(PRERELEASE_ON)" ] && gh release view -R $(REPO) >/dev/null 2>&1; then \
+	  git checkout -q -- dist/manifest.json; \
+	  echo "✓ The ZIPs are unchanged and $(REPO) has a release already: nothing to release"; exit 0; \
+	else \
+	  echo "✓ dist/ is unchanged, $(REPO) has no release yet: publishing the GitHub Release only"; \
 	fi; \
-	branch="dist/$$(date +%Y-%m-%d)-$$(git rev-parse --short HEAD)"; \
-	git switch -q -c "$$branch" && git add -A dist && \
-	git commit -q -m "Update the distribution ZIPs (generated from $$(git rev-parse --short HEAD))" && \
-	git push -q -u origin "$$branch" && \
-	echo "✓ Pushed $$branch. Open a pull request: https://github.com/arc42/$(SUBMODULE)/compare/$$branch?expand=1"
+	commit=$$(sed -n 's/^ *"templateCommit": "\([0-9a-f]*\)",*$$/\1/p' dist/manifest.json); \
+	if ! gh api "repos/$(REPO)/commits/$$commit" >/dev/null 2>&1; then \
+	  echo "✗ Template commit $$commit is not in $(REPO) (a fork that is behind? sync it first)" >&2; exit 1; \
+	fi; \
+	echo "==> Publishing release $(TAG) on $(REPO) ($$(wc -l < ../build/release/files.txt | tr -d ' ') files)"; \
+	gh release create "$(TAG)" -R $(REPO) --target "$$commit" --title "arc42 template $(TAG)" \
+	  --notes-file ../build/release/notes.md $(if $(PRERELEASE_ON),--prerelease,--latest) \
+	  $$(sed 's|^|dist/|' ../build/release/files.txt) && \
+	git checkout -q -- dist/manifest.json 2>/dev/null; \
+	gh release view "$(TAG)" -R $(REPO) >/dev/null 2>&1 && \
+	echo "✓ Published https://github.com/$(REPO)/releases/tag/$(TAG)"
+
+release-tools: host-only _gh-check ## Publish the hand-made tool files of dist/ as GitHub Release that never becomes latest (TOOLS_TAG=tools-YYYY.MM)
+	@[ -n "$(TOOLS_TAG)" ] || { echo "✗ Name the release: make release-tools TOOLS_TAG=tools-$$(date +%Y.%m)" >&2; exit 1; }
+	@if gh release view "$(TOOLS_TAG)" -R $(REPO) >/dev/null 2>&1 || gh api "repos/$(REPO)/git/ref/tags/$(TOOLS_TAG)" >/dev/null 2>&1; then \
+	  echo "✗ Tag $(TOOLS_TAG) exists on $(REPO)" >&2; exit 1; \
+	fi
+	@# flat names; a readme.md gets its folder as prefix (eap/readme.md -> eap-readme.md)
+	@rm -rf build/release-tools && mkdir -p build/release-tools && \
+	for f in $(SUBMODULE)/dist/{eap,legacy,doxygen,rhapsody}/* $(SUBMODULE)/dist/*-confluence*.zip; do \
+	  name=$$(basename "$$f"); \
+	  [ "$$name" = readme.md ] && name="$$(basename "$$(dirname "$$f")")-readme.md"; \
+	  [ -e "build/release-tools/$$name" ] && { echo "✗ Two tool files are named $$name" >&2; exit 1; }; \
+	  cp "$$f" "build/release-tools/$$name" || exit 1; \
+	done; \
+	echo "==> Publishing release $(TOOLS_TAG) on $(REPO) ($$(ls build/release-tools | wc -l | tr -d ' ') files)"; \
+	gh release create "$(TOOLS_TAG)" -R $(REPO) --latest=false --title "arc42 tool templates $(TOOLS_TAG)" \
+	  --notes "Hand-made arc42 templates for modelling and wiki tools: Enterprise Architect, Confluence, IBM Rhapsody, Doxygen. They are not built by the generator and change rarely; the template in all formats is in the latest release." \
+	  build/release-tools/* && \
+	echo "✓ Published https://github.com/$(REPO)/releases/tag/$(TOOLS_TAG) (not latest)"
 
 ##@ Cleanup
 
@@ -219,6 +272,10 @@ fix-owner: ## Linux only: give files created by the container (root) back to the
 
 # ---------------------------------------------------------------------------------------------
 # Internal targets
+
+_gh-check:
+	@command -v gh >/dev/null 2>&1 || { echo "✗ Releases need the GitHub CLI gh on this machine (it is not in the image): https://cli.github.com" >&2; exit 1; }
+	@gh auth status -h github.com >/dev/null 2>&1 || { echo "✗ gh is not logged in to github.com: gh auth login" >&2; exit 1; }
 
 host-only:
 	@if [ -n "$(ARC42_IN_CONTAINER)" ]; then \

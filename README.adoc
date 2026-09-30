@@ -20,6 +20,7 @@ This repository contains a Groovy-based build system that generates arc42 templa
 * `make`
 * https://www.docker.com/[Docker] with Compose v2
 * Git, to clone the repository (and for `make pin` and `make release`, which commit and push with your identity)
+* For releases only: the https://cli.github.com[GitHub CLI] `gh`, logged in (`gh auth login`)
 
 === Quick Start
 
@@ -65,7 +66,8 @@ Every run starts from a clean `build/` output, so nothing from an earlier run en
 | `make pin` | Record the checked-out arc42-template commit in this repository (a git commit on the current branch)
 
 2+| *Release*
-| `make release` | Full build, then commit the regenerated ZIPs to a new branch `dist/<date>-<commit>` of arc42-template and push it; open the pull request from the printed link. Builds the newest template master; stops if it differs from the recorded commit outside `dist/`.
+| `make release` | Full build, then commit the regenerated ZIPs to a new branch `dist/<TAG>` of arc42-template and push it (open the pull request from the printed link), and publish them as GitHub Release `<TAG>` (default: today, `YYYY.MM.DD`). Builds the newest template master; stops if it differs from the recorded commit outside `dist/`.
+| `make release-tools TOOLS_TAG=tools-YYYY.MM` | Publish the hand-made tool files of `dist/` (Enterprise Architect, Confluence, Rhapsody, Doxygen) as a GitHub Release that never becomes _latest_
 
 2+| *Docker image and tools*
 | `make image` | Build the Docker image; rerun after changing the `Dockerfile`
@@ -111,10 +113,18 @@ A new language only needs its directory in arc42-template: `<LANG>/` with a code
 === Publishing the Distribution ZIPs
 
 ----
-make release
+make release                                          # release YYYY.MM.DD on arc42/arc42-template
+make release TAG=2026.09.30.2                         # a second release on the same day
+make release REPO=you/arc42-template PRERELEASE=1     # test on your fork; a pre-release never becomes latest
+make release-tools TOOLS_TAG=tools-2026.09            # the hand-made tool files, never latest
 ----
 
-builds everything and pushes the regenerated ZIPs of `arc42-template/dist/` to a new branch of arc42-template; merging the pull request publishes them. `make clean-dist` discards regenerated ZIPs you do not want to release.
+`make release` builds everything with the release tag in `manifest.json`, then
+
+* pushes the regenerated ZIPs of `arc42-template/dist/` to a new branch `dist/<TAG>` of arc42-template, if a ZIP changed; merging the pull request updates `dist/` (kept until the download page uses the releases),
+* publishes a GitHub Release `<TAG>` with every ZIP of the manifest and `manifest.json` (not the hand-made files of `dist/`), release notes with the version of every language, targeted at the template commit that was built. `https://github.com/arc42/arc42-template/releases/latest/download/<file>` then serves the newest file.
+
+If no ZIP changed and the repository has a release already, nothing is published. It needs the GitHub CLI `gh`, logged in, on your machine. `make clean-dist` discards regenerated ZIPs you do not want to release.
 
 === Building Other Templates (e.g. req42)
 

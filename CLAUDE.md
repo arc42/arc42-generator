@@ -10,7 +10,7 @@ The actual template content lives in the `arc42-template` git submodule (the "Go
 
 ## Build Commands
 
-**Every task is a make target, and every target runs in Docker** (`docker compose run`). Needed locally: `make` and Docker with Compose v2. Only `make pin` and `make release` use the local git (commit/push with the user's identity). There are no shell scripts and no Gradle wrapper; do not add other entry points. The image sets `ARC42_IN_CONTAINER=1`, so inside the container (`make shell`, `docker compose up`) the same targets run directly.
+**Every task is a make target, and every target runs in Docker** (`docker compose run`). Needed locally: `make` and Docker with Compose v2. Only `make pin`, `make release` and `make release-tools` run on the host: they use the local git (commit/push with the user's identity) and, for the releases, the GitHub CLI `gh` (logged in; not in the image). There are no shell scripts and no Gradle wrapper; do not add other entry points. The image sets `ARC42_IN_CONTAINER=1`, so inside the container (`make shell`, `docker compose up`) the same targets run directly.
 
 ```bash
 make help                     # all targets and variables
@@ -25,13 +25,14 @@ make test-lint                # one test script (templates, discovery, converter
 make template-checkout        # submodule at the recorded commit (git submodule update --init, in the container)
 make template-update          # submodule to the newest master
 make pin                      # commit the checked-out submodule commit (local git)
-make release                  # build, then push the regenerated dist/*.zip to a branch dist/<date>-<sha> of arc42-template
+make release                  # build, push the regenerated dist/*.zip to a branch dist/<TAG> of arc42-template, publish GitHub Release <TAG>
+make release-tools TOOLS_TAG=tools-2026.09   # hand-made tool files of dist/ as GitHub Release that never becomes latest
 make clean | clean-dist       # remove build/, build2/ | restore the committed ZIPs
 make shell | versions | image-fresh
 ```
-Variables: `OPTS="..."` (options for build.groovy, see below), `FORMAT=html`, `TEMPLATE=../req42-framework` (another template repository, mounted at `/project`, output below it), `UPDATE_TEMPLATE=1`, `SOURCE_DATE_EPOCH`, `DOCKER_RUN_OPTS` (extra options for `docker compose run`; the arc42-template CI runs `make templates TEMPLATE=$GITHUB_WORKSPACE DOCKER_RUN_OPTS="-e GITHUB_ACTIONS=true -e GITHUB_STEP_SUMMARY=/project/..."`). Output is written below the current directory (`build/`, `arc42-template/dist/`) and, on Linux, handed back to the calling user (`fix-owner`).
+Variables: `OPTS="..."` (options for build.groovy, see below), `FORMAT=html`, `TEMPLATE=../req42-framework` (another template repository, mounted at `/project`, output below it), `UPDATE_TEMPLATE=1`, `SOURCE_DATE_EPOCH`, `TAG` (release tag, default today `YYYY.MM.DD`), `REPO` (release repository, default `arc42/arc42-template`; a fork for tests), `PRERELEASE=1`, `TOOLS_TAG`, `DOCKER_RUN_OPTS` (extra options for `docker compose run`; the arc42-template CI runs `make templates TEMPLATE=$GITHUB_WORKSPACE DOCKER_RUN_OPTS="-e GITHUB_ACTIONS=true -e GITHUB_STEP_SUMMARY=/project/..."`). Output is written below the current directory (`build/`, `arc42-template/dist/`) and, on Linux, handed back to the calling user (`fix-owner`).
 
-The output validation lives in the Makefile (`_validate-markdown`, `_validate-images`) and runs in the container. `release` builds the newest template master; it stops if master differs from the recorded submodule commit outside `dist/` (a merged release only changes `dist/`), unless `UPDATE_TEMPLATE=1`.
+The output validation lives in the Makefile (`_validate-markdown`, `_validate-images`) and runs in the container. `release` builds the newest template master; it stops if master differs from the recorded submodule commit outside `dist/` (a merged release only changes `dist/`), unless `UPDATE_TEMPLATE=1`. It builds with `--release-tag=$(TAG)`, pushes a branch `dist/<TAG>` if a ZIP (or the manifest apart from its tag) changed, and publishes a GitHub Release with the files of `build/release/files.txt` (the ZIPs of the manifest plus `manifest.json`) and the notes of `build/release/notes.md`, targeted at the manifest's `templateCommit`. Nothing changed and a release exists: nothing is published.
 
 ### CLI Options
 Options of `build.groovy`, passed through make as `OPTS="..."` (e.g. `make templates OPTS=--lint=warn`):
@@ -195,4 +196,4 @@ make shell
 When updating templates:
 1. Template changes (including translations) are made in arc42-template via pull requests; its CI validates them with this generator.
 2. When arc42-template master moves, Dependabot opens a pull request here that moves the submodule pin; the CI builds it. Manually: `make template-update && make pin`.
-3. `make release` builds and pushes the regenerated ZIPs to a branch of arc42-template; merging that pull request publishes them.
+3. `make release` builds, pushes the regenerated ZIPs to a branch of arc42-template (merging that pull request updates `dist/`) and publishes them as GitHub Release (decision: ADR 0012 in arc42/meta.arc42.org).
