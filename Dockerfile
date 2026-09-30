@@ -9,6 +9,7 @@ FROM alpine:3.20 AS builder
 # - git: For submodule management
 # - wget & unzip: For downloading Groovy and pandoc
 # - cmark: CommonMark markdown validator
+# - font-droid-nonlatin: DroidSansFallbackFull.ttf, the Chinese fallback font of the PDF output
 # pandoc is deliberately NOT taken from the Alpine repository (unpinned
 # version); it is installed below from the official GitHub release, pinned to
 # the same version everywhere, and verified against a SHA-256 checksum.
@@ -18,7 +19,8 @@ RUN apk add --no-cache \
     git \
     wget \
     unzip \
-    cmark
+    cmark \
+    font-droid-nonlatin
 
 # Install pandoc from the official release tarball (pinned + checksum-verified).
 # The release binaries are statically linked, so they run on Alpine (musl).
@@ -96,6 +98,9 @@ RUN git config --global --add safe.directory '*'
 
 # Copy the pinned, verified pandoc binary from builder (static, no dependencies)
 COPY --from=builder /usr/local/bin/pandoc /usr/local/bin/pandoc
+
+# Fallback font of the PDF output for Chinese (lib/pdf-theme.yml); only this file of the package is needed
+COPY --from=builder /usr/share/fonts/droid-nonlatin/DroidSansFallbackFull.ttf /usr/share/fonts/droid-nonlatin/
 
 # Copy Groovy installation from builder
 COPY --from=builder /opt/groovy-5.0.3 /opt/groovy-5.0.3

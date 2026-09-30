@@ -35,7 +35,7 @@ make test       # all test scripts
 
 * checks out the arc42-template submodule (Golden Master) at the commit recorded in this repository,
 * validates the Golden Master (conditionals, help blocks, the `arc42help` attribute, images, version.properties) and stops on errors,
-* generates the templates in all languages and styles and converts them to 14 output formats (HTML, Markdown variants, DOCX, EPUB, LaTeX, reStructuredText, Textile, DocBook, AsciiDoc), stopping on Asciidoctor or Pandoc diagnostics,
+* generates the templates in all languages and styles and converts them to 15 output formats (HTML, PDF, Markdown variants, DOCX, EPUB, LaTeX, reStructuredText, Textile, DocBook, AsciiDoc), stopping on Asciidoctor or Pandoc diagnostics,
 * creates the distribution ZIPs in `arc42-template/dist/`, together with a `manifest.json` that lists languages (with version and date), styles, formats and every ZIP with its size and SHA-256,
 * validates the output: the Markdown with `cmark` (warnings only) and the images of the with-help styles (fails the build).
 
@@ -167,7 +167,8 @@ The container includes:
 * Pandoc 3.7.0.2 (document converter, pinned release binary with checksum)
 * cmark (CommonMark validator)
 * GNU make and git
-* AsciidoctorJ 2.5.10 (AsciiDoc processor, bundles Asciidoctor 2.0.20)
+* AsciidoctorJ 2.5.10 (AsciiDoc processor, bundles Asciidoctor 2.0.20) and AsciidoctorJ PDF 2.3.27
+* Droid Sans Fallback (fallback font of the PDF output for Chinese)
 
 
 [[generator-requirements]]

@@ -44,6 +44,7 @@ formats = [
     'docx': [imageFolder: true, label: 'Word (.docx)'],
     'docbook': [imageFolder: true, label: 'DocBook'],
     'latex': [imageFolder: true, label: 'LaTeX'],
+    'pdf': [imageFolder: false, label: 'PDF'],
 ]
 
 distribution {
