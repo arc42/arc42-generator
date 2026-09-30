@@ -46,12 +46,14 @@ distribution {
 }
 
 // EN and DE have names in the config, ZH has none; DE uses a space instead of a hyphen in revnumber
+// EN and DE have a machine-readable revdate-iso, ZH has none
+def isoDates = [EN: '2025-07', DE: '2025-12']
 [EN: ['9.0-EN', 'July 2025'], DE: ['9.1 DE', 'Dezember 2025'], ZH: ['9.0-ZH', '7月 2025']].each { lang, props ->
     new File(fixture, "${lang}/adoc").mkdirs()
     new File(fixture, "${lang}/images").mkdirs()
     new File(fixture, "${lang}/demo-template.adoc").write("= Demo ${lang}\n\ninclude::adoc/01_chapter.adoc[]\n", 'utf-8')
     new File(fixture, "${lang}/adoc/01_chapter.adoc").write("== Chapter\n\nCONTENT ${lang}\n", 'utf-8')
-    new File(fixture, "${lang}/version.properties").write("revnumber=${props[0]}\nrevdate=${props[1]}\nrevremark=(test)\n", 'utf-8')
+    new File(fixture, "${lang}/version.properties").write("revnumber=${props[0]}\nrevdate=${props[1]}\n${isoDates[lang] ? "revdate-iso=${isoDates[lang]}\n" : ''}revremark=(test)\n", 'utf-8')
     new File(fixture, "${lang}/images/demo-logo.png").bytes = [1, 2, 3] as byte[]
 }
 
@@ -99,8 +101,8 @@ try {
 
     println "=== Test 2: languages come from version.properties and the config ==="
     assert m.languages == [
-        [code: 'DE', name: 'Deutsch', version: '9.1', date: 'Dezember 2025'],
-        [code: 'EN', name: 'English', version: '9.0', date: 'July 2025'],
+        [code: 'DE', name: 'Deutsch', version: '9.1', date: 'Dezember 2025', isoDate: '2025-12'],
+        [code: 'EN', name: 'English', version: '9.0', date: 'July 2025', isoDate: '2025-07'],
         [code: 'ZH', name: 'ZH', version: '9.0', date: '7月 2025'],
     ], "unexpected languages: ${m.languages}"
     assert manifestFile.getText('utf-8').contains('7月'), "non-ASCII text should be written as is, not \\u-escaped"

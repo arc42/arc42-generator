@@ -31,6 +31,8 @@ UPDATE_TEMPLATE ?=
 # release (host only, needs the GitHub CLI gh): tag, repository, pre-release, tag of the tools release
 TAG ?= $(shell date +%Y.%m.%d)
 REPO ?= arc42/arc42-template
+# the website that is notified after a release (repository_dispatch template-released)
+SITE_REPO ?= arc42/arc42.org-site
 PRERELEASE ?=
 TOOLS_TAG ?=
 # check-downloads: where the files are served; CHECKSUMS=1 downloads them and compares the SHA-256
@@ -218,7 +220,9 @@ endif
 	@# the same template content as recorded (or UPDATE_TEMPLATE): build from master
 	@$(MAKE) --no-print-directory build UPDATE_TEMPLATE=1 OPTS="$(strip $(OPTS) --release-tag=$(TAG))"
 	@# nothing to release: the files (names and SHA-256) equal the manifest of the latest release;
-	@# a pre-release is always published
+	@# a pre-release is always published. After a real release on arc42, the website is notified
+	@# (repository_dispatch template-released, arc42.org-site workflow refresh-downloads); if that
+	@# fails, the site's weekly refresh catches up.
 	@now=$$(grep -E '"(name|sha256)":' $(DIST_DIR)/manifest.json); \
 	prev=$$(gh release download -R $(REPO) --pattern manifest.json -O - 2>/dev/null | grep -E '"(name|sha256)":'); \
 	if [ -z "$(PRERELEASE_ON)" ] && [ -n "$$prev" ] && [ "$$prev" = "$$now" ]; then \
@@ -232,7 +236,14 @@ endif
 	gh release create "$(TAG)" -R $(REPO) --target "$$commit" --title "arc42 template $(TAG)" \
 	  --notes-file build/release/notes.md $(if $(PRERELEASE_ON),--prerelease,--latest) \
 	  $$(sed 's|^|$(DIST_DIR)/|' build/release/files.txt) && \
-	echo "✓ Published https://github.com/$(REPO)/releases/tag/$(TAG)"
+	echo "✓ Published https://github.com/$(REPO)/releases/tag/$(TAG)" || exit 1; \
+	if [ -z "$(PRERELEASE_ON)" ] && [ "$(REPO)" = "arc42/arc42-template" ]; then \
+	  if gh api repos/$(SITE_REPO)/dispatches -f event_type=template-released -f "client_payload[tag]=$(TAG)" >/dev/null 2>&1; then \
+	    echo "✓ Notified $(SITE_REPO): the download page will refresh from release $(TAG)"; \
+	  else \
+	    echo "⚠ Could not notify $(SITE_REPO) (template-released); its weekly refresh catches up, or run its workflow 'Refresh downloads'" >&2; \
+	  fi; \
+	fi
 
 release-tools: host-only _gh-check ## Publish the hand-made tool files (arc42-template other-formats/) as GitHub Release that never becomes latest (TOOLS_TAG=tools-YYYY.MM)
 	@[ -n "$(TOOLS_TAG)" ] || { echo "✗ Name the release: make release-tools TOOLS_TAG=tools-$$(date +%Y.%m)" >&2; exit 1; }

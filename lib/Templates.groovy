@@ -21,6 +21,9 @@ class Templates {
     /** Properties every <LANG>/version.properties must define */
     static final List<String> VERSION_PROPERTIES = ['revnumber', 'revdate', 'revremark']
 
+    /** Machine-readable version date (YYYY-MM) next to the localised revdate; manifest.json carries it as isoDate */
+    static final String ISO_DATE_PROPERTY = 'revdate-iso'
+
     /** image::target[...] (block) and image:target[...] (inline) macros; the target must not start with ':' */
     static final Pattern IMAGE_MACRO = ~/image::?([^\[\s:][^\[\s]*)\[/
 
@@ -170,6 +173,8 @@ class Templates {
      *            but none of its documents sets the attribute :<prefix><feature>: (the style
      *            would silently lose every block of that feature)
      * - error:   version.properties is missing or lacks revnumber, revdate or revremark
+     * - error:   revdate-iso in version.properties is not a month in the form YYYY-MM
+     * - warning: version.properties has no revdate-iso (the download page then shows the localised revdate)
      * - warning: the chapter files (adoc/*.adoc) differ from those of the EN language
      * - warning: a chapter has a different number of feature blocks than its EN counterpart
      *
@@ -427,12 +432,15 @@ class Templates {
         return open ? open[0] : null
     }
 
-    /** version.properties must exist and define all VERSION_PROPERTIES */
+    /** version.properties must exist and define all VERSION_PROPERTIES; revdate-iso should be there, as YYYY-MM */
     private List<Map> lintVersionProperties(File languageDir, String language) {
         def file = new File(languageDir, 'version.properties')
         def path = language + '/version.properties'
         def error = { String message ->
             [severity: 'error', language: language, file: path, line: null, message: message]
+        }
+        def warning = { String message ->
+            [severity: 'warning', language: language, file: path, line: null, message: message]
         }
 
         if (!file.isFile()) {
@@ -441,7 +449,14 @@ class Templates {
         def properties = new Properties()
         file.withReader('utf-8') { properties.load(it) }
         def missing = VERSION_PROPERTIES.findAll { !properties.getProperty(it)?.trim() }
-        return missing ? [error("version.properties lacks ${missing.join(', ')}")] : []
+        def problems = missing ? [error("version.properties lacks ${missing.join(', ')}")] : []
+        def isoDate = properties.getProperty(ISO_DATE_PROPERTY)?.trim()
+        if (!isoDate) {
+            problems << warning("version.properties has no ${ISO_DATE_PROPERTY} (the month of revdate as YYYY-MM, e.g. 2025-07)")
+        } else if (!(isoDate ==~ /\d{4}-(0[1-9]|1[0-2])/)) {
+            problems << error("${ISO_DATE_PROPERTY} must be a month as YYYY-MM, found '${isoDate}'")
+        }
+        return problems
     }
 
     /** Translation drift warnings: chapter files and feature block counts compared with the reference language */
