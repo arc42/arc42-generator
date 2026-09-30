@@ -27,6 +27,7 @@ make template-update          # submodule to the newest master
 make pin                      # commit the checked-out submodule commit (local git)
 make release                  # build, push the regenerated dist/*.zip to a branch dist/<TAG> of arc42-template, publish GitHub Release <TAG>
 make release-tools TOOLS_TAG=tools-2026.09   # hand-made tool files of dist/ as GitHub Release that never becomes latest
+make check-downloads PREFIX=<url> [CHECKSUMS=1]   # every file of dist/manifest.json downloadable from PREFIX (and its SHA-256)
 make clean | clean-dist       # remove build/, build2/ | restore the committed ZIPs
 make shell | versions | image-fresh
 ```
@@ -135,7 +136,8 @@ make test-discovery     # template discovery
 make test-converter     # format conversion, multi-page help text, clean outputs, diagnostics, reproducible DOCX/EPUB/PDF, Chinese PDF font
 make test-config        # building a non-arc42 project from its own config file
 make test-lint          # golden master validation on a fixture, ZH-TW discovery, GitHub annotations and report
-make test-manifest      # manifest.json: languages, styles, formats, sha256 of every ZIP, reproducibility
+make test-manifest      # manifest.json: languages, styles, formats, sha256 of every ZIP, reproducibility, release notes, template commit
+make test-downloads     # download check: missing files, redirects, checksums (local HTTP server)
 ```
 
 The test suite validates:

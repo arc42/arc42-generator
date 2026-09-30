@@ -48,6 +48,11 @@ def tests = [
         name: "Release Manifest",
         script: "test-manifest.groovy",
         description: "Tests manifest.json: languages, styles, formats, sha256 of every ZIP, reproducibility"
+    ],
+    [
+        name: "Download Check",
+        script: "test-downloads.groovy",
+        description: "Tests the download check: missing files, redirects, checksums against the manifest"
     ]
 ]
 

@@ -33,6 +33,9 @@ TAG ?= $(shell date +%Y.%m.%d)
 REPO ?= arc42/arc42-template
 PRERELEASE ?=
 TOOLS_TAG ?=
+# check-downloads: where the files are served; CHECKSUMS=1 downloads them and compares the SHA-256
+PREFIX ?=
+CHECKSUMS ?=
 PRERELEASE_ON := $(filter 1 true yes,$(PRERELEASE))
 
 SUBMODULE := arc42-template
@@ -72,7 +75,7 @@ TEST_SCRIPTS := $(patsubst test-%.groovy,%,$(wildcard test-*.groovy))
 .PHONY: help image image-fresh versions shell \
         build generate templates convert distribution validate \
         test check \
-        template-checkout template-update pin release release-tools \
+        template-checkout template-update pin release release-tools check-downloads \
         clean clean-dist fix-owner host-only _gh-check _validate-markdown _validate-images
 
 ##@ Help
@@ -95,6 +98,8 @@ help: ## Show this help
 	@echo "  REPO=owner/repo    release, release-tools: repository of the release (default: arc42/arc42-template)"
 	@echo "  PRERELEASE=1       release: publish as pre-release (never becomes latest)"
 	@echo "  TOOLS_TAG=tools-YYYY.MM  release-tools: tag of the tools release"
+	@echo "  PREFIX=url         check-downloads: prefix of the file URLs, e.g. https://github.com/arc42/arc42-template/releases/latest/download/"
+	@echo "  CHECKSUMS=1        check-downloads: download every file and compare its SHA-256 with manifest.json"
 	@echo "  DOCKER_RUN_OPTS    extra options for docker compose run, e.g. -e GITHUB_ACTIONS=true (used by the CI of arc42-template)"
 	@echo
 	@echo "Test scripts: $(TEST_SCRIPTS)"
@@ -256,6 +261,10 @@ release-tools: host-only _gh-check ## Publish the hand-made tool files of dist/ 
 	  --notes "Hand-made arc42 templates for modelling and wiki tools: Enterprise Architect, Confluence, IBM Rhapsody, Doxygen. They are not built by the generator and change rarely; the template in all formats is in the latest release." \
 	  build/release-tools/* && \
 	echo "✓ Published https://github.com/$(REPO)/releases/tag/$(TOOLS_TAG) (not latest)"
+
+check-downloads: ## Request every file of dist/manifest.json from PREFIX=url (CHECKSUMS=1: download and compare SHA-256)
+	@[ -n "$(PREFIX)" ] || { echo "✗ Name the prefix, e.g. make check-downloads PREFIX=https://github.com/arc42/arc42-template/releases/latest/download/" >&2; exit 2; }
+	$(RUN) groovy check-downloads.groovy "$(PREFIX)" $(if $(filter 1 true yes,$(CHECKSUMS)),--checksums) $(if $(TEMPLATE),--config=/project/buildconfig.groovy)
 
 ##@ Cleanup
 

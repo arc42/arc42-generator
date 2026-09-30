@@ -124,7 +124,15 @@ make release-tools TOOLS_TAG=tools-2026.09            # the hand-made tool files
 * pushes the regenerated ZIPs of `arc42-template/dist/` to a new branch `dist/<TAG>` of arc42-template, if a ZIP changed; merging the pull request updates `dist/` (kept until the download page uses the releases),
 * publishes a GitHub Release `<TAG>` with every ZIP of the manifest and `manifest.json` (not the hand-made files of `dist/`), release notes with the version of every language, targeted at the template commit that was built. `https://github.com/arc42/arc42-template/releases/latest/download/<file>` then serves the newest file.
 
-If no ZIP changed and the repository has a release already, nothing is published. It needs the GitHub CLI `gh`, logged in, on your machine. `make clean-dist` discards regenerated ZIPs you do not want to release.
+If no ZIP changed and the repository has a release already, nothing is published. The release targets need the GitHub CLI `gh`, logged in, on your machine. `make clean-dist` discards regenerated ZIPs you do not want to release.
+
+`make check-downloads PREFIX=<url>` requests every file of `dist/manifest.json` from a prefix and lists the missing ones; with `CHECKSUMS=1` it downloads them and compares their SHA-256 with the manifest:
+
+----
+make check-downloads PREFIX=https://github.com/arc42/arc42-template/raw/master/dist/
+make check-downloads PREFIX=https://github.com/arc42/arc42-template/releases/latest/download/ CHECKSUMS=1
+----
+
 
 === Building Other Templates (e.g. req42)
 
