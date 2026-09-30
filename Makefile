@@ -37,6 +37,8 @@ TOOLS_TAG ?=
 PREFIX ?=
 CHECKSUMS ?=
 PRERELEASE_ON := $(filter 1 true yes,$(PRERELEASE))
+# a template release (tag YYYY.MM.DD[.n], not a pre-release) exists on REPO; tools releases do not count
+HAS_TEMPLATE_RELEASE = gh release list -R $(REPO) --exclude-pre-releases --exclude-drafts --limit 100 --json tagName -q '.[].tagName' | grep -qE '^[0-9]{4}\.[0-9]{2}\.[0-9]{2}(\.[0-9]+)?$$'
 
 SUBMODULE := arc42-template
 
@@ -225,11 +227,11 @@ endif
 	  git commit -q -m "Update the distribution ZIPs for release $(TAG) (generated from $$(git rev-parse --short HEAD))" && \
 	  git push -q "https://github.com/$(REPO).git" "$$branch" && \
 	  echo "✓ Pushed $$branch to $(REPO). Open a pull request: https://github.com/$(REPO)/compare/$$branch?expand=1" || exit 1; \
-	elif [ -z "$(PRERELEASE_ON)" ] && gh release view -R $(REPO) >/dev/null 2>&1; then \
+	elif [ -z "$(PRERELEASE_ON)" ] && $(HAS_TEMPLATE_RELEASE); then \
 	  git checkout -q -- dist/manifest.json; \
-	  echo "✓ The ZIPs are unchanged and $(REPO) has a release already: nothing to release"; exit 0; \
+	  echo "✓ The ZIPs are unchanged and $(REPO) has a template release already: nothing to release"; exit 0; \
 	else \
-	  echo "✓ dist/ is unchanged, $(REPO) has no release yet: publishing the GitHub Release only"; \
+	  echo "✓ dist/ is unchanged, $(REPO) has no template release yet: publishing the GitHub Release only"; \
 	fi; \
 	commit=$$(sed -n 's/^ *"templateCommit": "\([0-9a-f]*\)",*$$/\1/p' dist/manifest.json); \
 	if ! gh api "repos/$(REPO)/commits/$$commit" >/dev/null 2>&1; then \
@@ -248,6 +250,8 @@ release-tools: host-only _gh-check ## Publish the hand-made tool files of dist/ 
 	@if gh release view "$(TOOLS_TAG)" -R $(REPO) >/dev/null 2>&1 || gh api "repos/$(REPO)/git/ref/tags/$(TOOLS_TAG)" >/dev/null 2>&1; then \
 	  echo "✗ Tag $(TOOLS_TAG) exists on $(REPO)" >&2; exit 1; \
 	fi
+	@# without a template release GitHub makes this release latest despite --latest=false
+	@$(HAS_TEMPLATE_RELEASE) || { echo "✗ $(REPO) has no template release yet: run make release first, otherwise GitHub makes the tools release latest" >&2; exit 1; }
 	@# flat names; a readme.md gets its folder as prefix (eap/readme.md -> eap-readme.md)
 	@rm -rf build/release-tools && mkdir -p build/release-tools && \
 	for f in $(SUBMODULE)/dist/{eap,legacy,doxygen,rhapsody}/* $(SUBMODULE)/dist/*-confluence*.zip; do \
