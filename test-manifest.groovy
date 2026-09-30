@@ -164,6 +164,26 @@ try {
     assert packager.lastTemplateCommit() == null, "without git there is no template commit"
     println "✓ Test 7 passed\n"
 
+    println "=== Test 8: a release writes notes and the list of files to upload ==="
+    def releaseDir = new File(fixture, 'build/release')
+    releaseDir.deleteDir()
+    new File(distDir, 'hand-made-confluence.zip').bytes = [1] as byte[]  // in dist/, not part of the release
+    packageAll(true, [releaseTag: '2026.09.29', templateCommit: 'abc1234567'])
+    def notes = new File(releaseDir, 'notes.md').getText('utf-8')
+    assert notes.contains('commit abc1234') && notes.contains('(2025-07-01)'), "notes name commit and date: ${notes}"
+    assert notes.contains('| English (EN) | 9.0 | July 2025 |') && notes.contains('| ZH (ZH) | 9.0 | 7月 2025 |'),
+        "one line per language: ${notes}"
+    assert notes.contains('HTML, Word (.docx)'), "formats by label: ${notes}"
+    def uploads = new File(releaseDir, 'files.txt').readLines('utf-8')
+    def m8 = new JsonSlurper().parse(manifestFile)
+    assert uploads == m8.files*.name + 'manifest.json', "every ZIP of the manifest plus the manifest: ${uploads}"
+    assert uploads.every { new File(distDir, it).exists() }, "every listed file exists in dist/"
+    assert !uploads.contains('hand-made-confluence.zip'), "hand-made files are not uploaded"
+    releaseDir.deleteDir()
+    packageAll(true, [:])
+    assert !releaseDir.exists(), "without a release tag nothing is written to build/release/"
+    println "✓ Test 8 passed\n"
+
     println "=== All Tests Passed! ==="
     System.exit(0)
 
