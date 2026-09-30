@@ -139,7 +139,7 @@ make validate TEMPLATE=../req42-framework
 
 === Testing the Generator
 
-See link:docs/TESTING.md[docs/TESTING.md] for a step-by-step guide: self-tests, the arc42 build, building another template such as req42, and what output to expect.
+See the https://github.com/arc42/meta.arc42.org[meta.arc42.org] repository (internal arc42 documentation) for a step-by-step guide: self-tests, the arc42 build, building another template such as req42, and what output to expect.
 
 === Build Validation
 
@@ -178,13 +178,13 @@ The container includes:
 
 We need to build the template for several output formats and natural languages from a single source (the Golden Master in arc42-template).
 
-* Technical formats: docx, Markdown (with numerous variants), AsciiDoc, reStructuredText, Textile, HTML
+* Technical formats: PDF, docx, Markdown (with numerous variants), AsciiDoc, reStructuredText, Textile, HTML
 * Variantes (aka _flavours_): withHelp (embedded help texts), plain (no help texts)
 * Natural languages: English, German, Spanish, French, Italian, Portuguese, Chinese and others.
 
 
 === Requirements Concerning arc42
-We collected the +arc42+ link:docs/arc42-requirements.adoc[requirements in a separate document].
+The +arc42+ requirements are collected in the https://github.com/arc42/meta.arc42.org[meta.arc42.org] repository.
 
 
 
