@@ -82,7 +82,7 @@ help: ## Show this help
 	@echo "  FORMAT=html        convert one format only (templates, convert, generate, build)"
 	@echo "  TEMPLATE=path      another template repository with its own buildconfig.groovy (not for build, release)"
 	@echo "  UPDATE_TEMPLATE=1  build: use the newest arc42-template master instead of the recorded commit"
-	@echo "  SOURCE_DATE_EPOCH  fixed timestamp for DOCX/EPUB/ZIP entries (default: last commit of the golden master)"
+	@echo "  SOURCE_DATE_EPOCH  fixed timestamp for DOCX/EPUB/ZIP entries (default: last golden master commit outside dist/)"
 	@echo "  DOCKER_RUN_OPTS    extra options for docker compose run, e.g. -e GITHUB_ACTIONS=true (used by the CI of arc42-template)"
 	@echo
 	@echo "Test scripts: $(TEST_SCRIPTS)"
@@ -182,12 +182,18 @@ ifneq ($(TEMPLATE),)
 	$(error release is for arc42 only)
 endif
 	@git -C $(SUBMODULE) fetch -q origin master
-	@if [ "$$(git -C $(SUBMODULE) rev-parse HEAD)" != "$$(git -C $(SUBMODULE) rev-parse origin/master)" ] && \
-	    [ -z "$(filter 1 true yes,$(UPDATE_TEMPLATE))" ]; then \
+	@pinned=$$(git rev-parse HEAD:$(SUBMODULE)); \
+	if [ -n "$(filter 1 true yes,$(UPDATE_TEMPLATE))" ] || [ "$$pinned" = "$$(git -C $(SUBMODULE) rev-parse origin/master)" ]; then \
+	  exit 0; \
+	elif git -C $(SUBMODULE) diff --quiet "$$pinned" origin/master -- . ':(exclude)dist'; then \
+	  echo "✓ $(SUBMODULE) master differs from the recorded commit $$(git -C $(SUBMODULE) rev-parse --short $$pinned) only in dist/: releasing from master"; \
+	else \
 	  echo "✗ The recorded $(SUBMODULE) commit is not the newest master: the ZIPs would not match the template." >&2; \
 	  echo "  Merge the pending pin update (Dependabot) first, or: make release UPDATE_TEMPLATE=1" >&2; exit 1; \
 	fi
-	@$(MAKE) --no-print-directory build
+	@# the same template content as recorded (or UPDATE_TEMPLATE): build from master, so that the
+	@# release branch starts from the current dist/ and ZIPs deleted there cannot come back
+	@$(MAKE) --no-print-directory build UPDATE_TEMPLATE=1
 	@cd $(SUBMODULE) && \
 	if [ -z "$$(git status --porcelain -- dist)" ]; then \
 	  echo "✓ dist/ is unchanged: nothing to release"; exit 0; \

@@ -39,7 +39,7 @@ make test       # all test scripts
 * creates the distribution ZIPs in `arc42-template/dist/`, together with a `manifest.json` that lists languages (with version and date), styles, formats and every ZIP with its size and SHA-256,
 * validates the output: the Markdown with `cmark` (warnings only) and the images of the with-help styles (fails the build).
 
-Every run starts from a clean `build/` output, so nothing from an earlier run ends up in the ZIPs. The output is reproducible: unchanged content produces byte-identical files and ZIPs (timestamps come from `SOURCE_DATE_EPOCH` or the last commit of the Golden Master, not from the build time; every EPUB gets a fixed identifier derived from project, language and style instead of a random one).
+Every run starts from a clean `build/` output, so nothing from an earlier run ends up in the ZIPs. The output is reproducible: unchanged content produces byte-identical files and ZIPs (timestamps come from `SOURCE_DATE_EPOCH` or the last commit of the Golden Master outside `dist/`, not from the build time, so a merged release does not change them; every EPUB gets a fixed identifier derived from project, language and style instead of a random one).
 
 === Make Targets
 
@@ -65,7 +65,7 @@ Every run starts from a clean `build/` output, so nothing from an earlier run en
 | `make pin` | Record the checked-out arc42-template commit in this repository (a git commit on the current branch)
 
 2+| *Release*
-| `make release` | Full build, then commit the regenerated ZIPs to a new branch `dist/<date>-<commit>` of arc42-template and push it; open the pull request from the printed link. Stops if the recorded template commit is not the newest master.
+| `make release` | Full build, then commit the regenerated ZIPs to a new branch `dist/<date>-<commit>` of arc42-template and push it; open the pull request from the printed link. Builds the newest template master; stops if it differs from the recorded commit outside `dist/`.
 
 2+| *Docker image and tools*
 | `make image` | Build the Docker image; rerun after changing the `Dockerfile`

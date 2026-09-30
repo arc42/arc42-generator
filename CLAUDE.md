@@ -31,7 +31,7 @@ make shell | versions | image-fresh
 ```
 Variables: `OPTS="..."` (options for build.groovy, see below), `FORMAT=html`, `TEMPLATE=../req42-framework` (another template repository, mounted at `/project`, output below it), `UPDATE_TEMPLATE=1`, `SOURCE_DATE_EPOCH`, `DOCKER_RUN_OPTS` (extra options for `docker compose run`; the arc42-template CI runs `make templates TEMPLATE=$GITHUB_WORKSPACE DOCKER_RUN_OPTS="-e GITHUB_ACTIONS=true -e GITHUB_STEP_SUMMARY=/project/..."`). Output is written below the current directory (`build/`, `arc42-template/dist/`) and, on Linux, handed back to the calling user (`fix-owner`).
 
-The output validation lives in the Makefile (`_validate-markdown`, `_validate-images`) and runs in the container. `release` stops unless the recorded submodule commit is the newest template master (or `UPDATE_TEMPLATE=1`).
+The output validation lives in the Makefile (`_validate-markdown`, `_validate-images`) and runs in the container. `release` builds the newest template master; it stops if master differs from the recorded submodule commit outside `dist/` (a merged release only changes `dist/`), unless `UPDATE_TEMPLATE=1`.
 
 ### CLI Options
 Options of `build.groovy`, passed through make as `OPTS="..."` (e.g. `make templates OPTS=--lint=warn`):
@@ -45,7 +45,7 @@ Options of `build.groovy`, passed through make as `OPTS="..."` (e.g. `make templ
 
 Every run starts from a clean output: the `templates` phase deletes `build/src_gen/`, the `convert` phase deletes the output directories (and DocBook intermediates) of the formats it converts. Nothing from an earlier run survives into the distribution ZIPs.
 
-Output is reproducible: the HTML footer carries no build timestamp (Asciidoctor `reproducible`), and the dates inside DOCX/EPUB files and the timestamps of the ZIP entries come from `SOURCE_DATE_EPOCH` or, if unset, from the last commit of the golden master. Every EPUB gets a fixed identifier (a UUID derived from project, language and style) instead of the random UUID Pandoc would otherwise create. Unchanged content produces byte-identical files and ZIPs, and a byte-identical `manifest.json`.
+Output is reproducible: the HTML footer carries no build timestamp (Asciidoctor `reproducible`), and the dates inside DOCX/EPUB files and the timestamps of the ZIP entries come from `SOURCE_DATE_EPOCH` or, if unset, from the last commit of the golden master outside the distribution directory (`Packager.lastTemplateCommit()`, also the `templateCommit` of the manifest), so a merged release does not change the next build. Every EPUB gets a fixed identifier (a UUID derived from project, language and style) instead of the random UUID Pandoc would otherwise create. Unchanged content produces byte-identical files and ZIPs, and a byte-identical `manifest.json`.
 
 ## Architecture
 

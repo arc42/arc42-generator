@@ -210,6 +210,33 @@ class Packager {
     }
 
     /**
+     * The last commit of the golden master that changed anything outside the distribution directory,
+     * as [commit: hash, time: commit time in seconds], or null without git. A merged release only adds
+     * ZIPs; it must not change the timestamps or the templateCommit of the next build, otherwise every
+     * release would rewrite all ZIPs again. First-parent history: the merge commit on master counts,
+     * not a commit of the merged branch.
+     */
+    Map lastTemplateCommit() {
+        def goldenMasterDir = new File(projectRoot, config.goldenMaster.sourcePath.toString()).canonicalFile
+        def distDir = new File(projectRoot, config.distribution.targetPath.toString()).canonicalFile
+        def cmd = ['git', '-C', goldenMasterDir.path, 'log', '-1', '--first-parent', '--format=%H %ct', '--', '.']
+        if (distDir.path.startsWith(goldenMasterDir.path + File.separator)) {
+            cmd << ":(exclude)${goldenMasterDir.toPath().relativize(distDir.toPath())}".toString()
+        }
+        try {
+            def git = cmd.execute()
+            def output = git.text.trim()
+            if (git.waitFor() == 0 && output ==~ /[0-9a-f]{40} \d+/) {
+                def (commit, time) = output.tokenize(' ')
+                return [commit: commit, time: time.toLong()]
+            }
+        } catch (Exception ignored) {
+            // no git or not a repository
+        }
+        return null
+    }
+
+    /**
      * Write manifest.json into the distribution directory: the machine-readable list of what one
      * release contains. The same input gives a byte-identical file: everything is sorted, and the
      * only date is derived from sourceDateEpoch.
