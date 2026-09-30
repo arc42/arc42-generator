@@ -1,0 +1,13 @@
+# Theme of the PDF output (asciidoctor-pdf): the default theme, plus a fallback font for the
+# characters its Noto Serif does not contain (Chinese). The font is looked up in pdf-fontsdir,
+# which the converter sets to the bundled fonts and the directory of the fallback font in the image.
+extends: default
+font:
+  catalog:
+    merge: true
+    DroidSansFallback:
+      normal: DroidSansFallbackFull.ttf
+      bold: DroidSansFallbackFull.ttf
+      italic: DroidSansFallbackFull.ttf
+      bold_italic: DroidSansFallbackFull.ttf
+  fallbacks: [DroidSansFallback]

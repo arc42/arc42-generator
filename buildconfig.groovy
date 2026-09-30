@@ -40,13 +40,11 @@ formats = [
     'markdownMPStrict': [imageFolder: true, label: 'Markdown MP · strict'],
     'gitHubMarkdown': [imageFolder: true, label: 'GitHub Markdown'],
     'gitHubMarkdownMP': [imageFolder: true, label: 'GitHub Markdown · MP'],
-    'mkdocs': [imageFolder: true, label: 'MkDocs'],
-    'mkdocsMP': [imageFolder: true, label: 'MkDocs · multi-page'],
     'textile': [imageFolder: true, label: 'Textile'],
-    'textile2': [imageFolder: true, label: 'Textile 2'],
     'docx': [imageFolder: true, label: 'Word (.docx)'],
     'docbook': [imageFolder: true, label: 'DocBook'],
     'latex': [imageFolder: true, label: 'LaTeX'],
+    'pdf': [imageFolder: false, label: 'PDF'],
 ]
 
 distribution {

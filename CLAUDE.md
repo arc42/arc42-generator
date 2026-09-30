@@ -14,7 +14,7 @@ The actual template content lives in the `arc42-template` git submodule (the "Go
 
 ```bash
 make help                     # all targets and variables
-make image                    # build the Docker image (Java, Groovy, Pandoc 3.7.0.2, cmark, make, git)
+make image                    # build the Docker image (Java, Groovy, Pandoc 3.7.0.2, cmark, make, git, CJK fallback font)
 make build                    # full arc42 build: template-checkout, generate, validate
 make build UPDATE_TEMPLATE=1  # the same with the newest arc42-template master
 make generate                 # groovy build.groovy (all phases), no checkout, no output validation
@@ -74,13 +74,14 @@ Main orchestration script that ties everything together. Supports CLI arguments 
 - **Query API**: Find templates by language, style, or both
 
 #### `lib/Converter.groovy`
-- **AsciidoctorJ Integration**: Direct HTML and DocBook conversion
+- **AsciidoctorJ Integration**: Direct HTML, PDF and DocBook conversion
+- **PDF**: AsciidoctorJ PDF with `lib/pdf-theme.yml` (default theme plus the fallback font Droid Sans Fallback for Chinese, installed in the Docker image under `/usr/share/fonts/droid-nonlatin`); images are embedded, so the PDF ZIP holds a single file
 - **Pandoc Integration**: Two-step conversion (AsciiDoc → DocBook → target format)
 - **Multi-page formats**: one DocBook and one output file per chapter; the feature attributes of the style (e.g. `arc42help` for with-help) are set for the per-chapter conversion
 - **Diagnostics**: Asciidoctor log records and Pandoc's stderr are collected in `diagnostics`, printed after `convertAll()` (deduplicated) and evaluated by `build.groovy` against `--failure-level`
 - **Clean outputs**: `cleanOutputs()` deletes the output directories and DocBook intermediates before a conversion
 - **Parallel Execution**: Uses GParsPool for true parallel conversion
-- **Supported Formats**: html, asciidoc, docbook, markdown, docx, epub, latex, and more
+- **Supported Formats**: html, pdf, asciidoc, docbook, markdown, docx, epub, latex, and more
 
 #### `lib/Packager.groovy`
 - **ZIP Creation**: Packages templates + images into distribution archives
@@ -93,7 +94,7 @@ Main orchestration script that ties everything together. Supports CLI arguments 
 ### Key Configuration Files
 - **buildconfig.groovy**: Defines template styles, output formats, and paths
   - `templateStyles`: `plain` (no help), `with-help` (includes help text)
-  - `formats`: 15+ output formats including asciidoc, html, markdown, docx, epub, latex, etc.
+  - `formats`: 15 output formats including asciidoc, html, pdf, markdown, docx, epub, latex, etc.
   - `goldenMaster`: Path to arc42-template submodule
 
 ### Supported Languages
@@ -102,11 +103,11 @@ Main orchestration script that ties everything together. Supports CLI arguments 
 The system automatically discovers all language directories in `arc42-template/` that match the pattern `/^[A-Z]{2,}(-[A-Z]{2,})?$/`: a language code, optionally with a region such as `ZH-TW`. No hardcoding required.
 
 ### Format Conversion Strategy
-- **AsciiDoc → HTML**: Direct conversion via AsciidoctorJ
+- **AsciiDoc → HTML, PDF**: Direct conversion via AsciidoctorJ (PDF: AsciidoctorJ PDF)
 - **AsciiDoc → Other formats**: Two-step process
   1. AsciiDoc → DocBook XML (via AsciidoctorJ)
   2. DocBook → Target format (via Pandoc)
-- **Multi-page formats**: markdownMP, mkdocsMP, etc. split the template into separate files
+- **Multi-page formats**: markdownMP, gitHubMarkdownMP, etc. split the template into separate files
 
 ### Feature Flag System
 The Golden Master uses AsciiDoc role attributes to mark content (prefix set by `project.featurePrefix` in the config):
@@ -115,7 +116,7 @@ The Golden Master uses AsciiDoc role attributes to mark content (prefix set by `
 - `lib/Templates.groovy` removes unwanted features using regex to create template variants
 
 ## System Requirements
-Only `make` and Docker with Compose v2. The Docker image contains Java 21, Groovy 5.0.3, Pandoc 3.7.0.2 (pinned, checksum-verified), cmark, make and git. The Groovy scripts need Groovy 4.0+ and Java 11+ if they are ever run outside the image.
+Only `make` and Docker with Compose v2. The Docker image contains Java 21, Groovy 5.0.3, Pandoc 3.7.0.2 (pinned, checksum-verified), cmark, make, git and the PDF fallback font for Chinese (Droid Sans Fallback). The Groovy scripts need Groovy 4.0+ and Java 11+ if they are ever run outside the image.
 
 ## Output Locations
 - `build/src_gen/`: Generated AsciiDoc templates (plain, with-help variants); deleted at the start of the `templates` phase
@@ -130,7 +131,7 @@ Only `make` and Docker with Compose v2. The Docker image contains Java 21, Groov
 make test               # all test scripts (groovy run-all-tests.groovy in the container)
 make test-templates     # template generation
 make test-discovery     # template discovery
-make test-converter     # format conversion, multi-page help text, clean outputs, diagnostics, reproducible DOCX/EPUB
+make test-converter     # format conversion, multi-page help text, clean outputs, diagnostics, reproducible DOCX/EPUB/PDF, Chinese PDF font
 make test-config        # building a non-arc42 project from its own config file
 make test-lint          # golden master validation on a fixture, ZH-TW discovery, GitHub annotations and report
 make test-manifest      # manifest.json: languages, styles, formats, sha256 of every ZIP, reproducibility

@@ -2,6 +2,7 @@
 
 @Grab('org.asciidoctor:asciidoctorj:2.5.10')
 @Grab('org.asciidoctor:asciidoctorj-diagram:2.2.14')
+@Grab('org.asciidoctor:asciidoctorj-pdf:2.3.27')
 @Grab('org.codehaus.gpars:gpars:1.2.1')
 
 import org.asciidoctor.Asciidoctor
@@ -17,7 +18,7 @@ import org.asciidoctor.log.Severity
  * Converter.groovy - Format conversion using AsciidoctorJ and Pandoc
  *
  * Responsibilities:
- * - Convert AsciiDoc to HTML using AsciidoctorJ
+ * - Convert AsciiDoc to HTML and PDF using AsciidoctorJ (PDF: asciidoctorj-pdf)
  * - Convert AsciiDoc to DocBook using AsciidoctorJ
  * - Convert DocBook to various formats using Pandoc (markdown, docx, epub, latex, etc.)
  * - Handle image copying for each format
@@ -35,6 +36,10 @@ class Converter {
 
     /** Severities from least to most severe; anything unknown is treated like ERROR */
     static final List<Severity> SEVERITY_ORDER = [Severity.DEBUG, Severity.INFO, Severity.WARN, Severity.ERROR, Severity.FATAL]
+
+    /** PDF theme (relative to the generator directory) and the directory of its fallback font (Chinese), installed in the Docker image */
+    static final String PDF_THEME = 'lib/pdf-theme.yml'
+    static final String PDF_FALLBACK_FONT_DIR = '/usr/share/fonts/droid-nonlatin'
 
     /**
      * Unix timestamp (seconds) that Pandoc uses for the dates inside DOCX and EPUB files instead of "now",
@@ -81,6 +86,8 @@ class Converter {
             def result = null
             if (format == 'html') {
                 result = convertToHTML(template, outputDir)
+            } else if (format == 'pdf') {
+                result = convertToPDF(template, outputDir)
             } else if (format == 'asciidoc') {
                 result = copyAsciidoc(template, outputDir)
             } else if (format == 'docbook') {
@@ -121,6 +128,36 @@ class Converter {
             .backend('html5')
             .safe(SafeMode.UNSAFE)
             .baseDir(baseDir)
+            .mkDirs(true)
+            .attributes(attributes)
+            .build()
+
+        asciidoctor.convertFile(mainFile, options)
+
+        return outputFile.absolutePath
+    }
+
+    /**
+     * Convert AsciiDoc to PDF using AsciidoctorJ PDF; the images are embedded, so the output is a single file
+     */
+    String convertToPDF(Map template, String outputDir) {
+        def mainFile = new File(template.mainFile).canonicalFile
+        def outputFileDir = new File(projectRoot, outputDir).canonicalFile
+        outputFileDir.mkdirs()
+        def outputFile = new File(outputFileDir, "${projectName}-${template.language}.pdf")
+
+        def attributes = createAttributes(template)
+        attributes.put('backend', 'pdf')
+        // images are read from the template's own images directory instead of a copy next to the output
+        if (template.imagesDir) attributes.put('imagesdir', new File(template.imagesDir).canonicalPath)
+        attributes.put('pdf-theme', new File(PDF_THEME).canonicalPath)
+        attributes.put('pdf-fontsdir', "GEM_FONTS_DIR;${PDF_FALLBACK_FONT_DIR}".toString())
+
+        def options = Options.builder()
+            .toFile(outputFile)
+            .backend('pdf')
+            .safe(SafeMode.UNSAFE)
+            .baseDir(new File(template.srcDir).canonicalFile)
             .mkDirs(true)
             .attributes(attributes)
             .build()
@@ -225,8 +262,7 @@ class Converter {
 
         // Add standalone flag for most formats
         if (format in ['latex', 'rst', 'markdown', 'markdownMP', 'markdownStrict',
-                       'markdownMPStrict', 'gitHubMarkdown', 'gitHubMarkdownMP',
-                       'mkdocs', 'mkdocsMP']) {
+                       'markdownMPStrict', 'gitHubMarkdown', 'gitHubMarkdownMP']) {
             pandocArgs.add(1, '-s')  // Insert after 'pandoc'
         }
 
@@ -291,9 +327,7 @@ class Converter {
 
         def sourceImagesDir = new File(template.imagesDir)
 
-        // mkdocs/mkdocsMP use docs/images, others use images
-        def targetImagesPath = (format in ['mkdocs', 'mkdocsMP']) ? "${outputDir}/docs/images" : "${outputDir}/images"
-        def targetImagesDir = new File(projectRoot, targetImagesPath)
+        def targetImagesDir = new File(projectRoot, "${outputDir}/images")
         targetImagesDir.mkdirs()
 
         // Copy all image files
@@ -318,12 +352,12 @@ class Converter {
 
     /** Returns true for formats that produce one output file per chapter */
     boolean isMultiPage(String format) {
-        return format in ['markdownMP', 'mkdocsMP', 'markdownMPStrict', 'gitHubMarkdownMP']
+        return format in ['markdownMP', 'markdownMPStrict', 'gitHubMarkdownMP']
     }
 
     /** Returns true for formats that Pandoc renders from the single-document DocBook intermediate */
     boolean usesDocBookIntermediate(String format) {
-        return !(format in ['html', 'asciidoc', 'docbook']) && !isMultiPage(format)
+        return !(format in ['html', 'pdf', 'asciidoc', 'docbook']) && !isMultiPage(format)
     }
 
     /** Output directory of a template for a format, relative to the project root */
@@ -443,11 +477,6 @@ class Converter {
             runPandoc(args, docbookMPDir, "${template.language}/${template.style} ${format} ${xmlFile.name}")
         }
 
-        // drop the generated boilerplate pages, but keep every real chapter
-        if (format == 'mkdocsMP') {
-            ['config.md', "about-${config.project.featurePrefix}.md".toString()].each { new File(outputFileDir, it).delete() }
-        }
-
         return outputFileDir.absolutePath
     }
 
@@ -490,10 +519,7 @@ class Converter {
             'markdownMPStrict': [pandocFormat: 'markdown_strict', extension: 'md', args: []],
             'gitHubMarkdown': [pandocFormat: 'gfm', extension: 'md', args: []],
             'gitHubMarkdownMP': [pandocFormat: 'gfm', extension: 'md', args: []],
-            'mkdocs': [pandocFormat: 'markdown', extension: 'md', args: []],
-            'mkdocsMP': [pandocFormat: 'markdown', extension: 'md', args: []],
             'textile': [pandocFormat: 'textile', extension: 'textile', args: []],
-            'textile2': [pandocFormat: 'textile', extension: 'textile', args: []],
             'docx': [pandocFormat: 'docx', extension: 'docx', args: []],
             'epub': [pandocFormat: 'epub', extension: 'epub', args: []],
             'latex': [pandocFormat: 'latex', extension: 'tex', args: []],
