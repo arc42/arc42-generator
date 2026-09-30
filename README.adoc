@@ -37,7 +37,7 @@ make test       # all test scripts
 * checks out the arc42-template submodule (Golden Master) at the commit recorded in this repository,
 * validates the Golden Master (conditionals, help blocks, the `arc42help` attribute, images, version.properties) and stops on errors,
 * generates the templates in all languages and styles and converts them to 15 output formats (HTML, PDF, Markdown variants, DOCX, EPUB, LaTeX, reStructuredText, Textile, DocBook, AsciiDoc), stopping on Asciidoctor or Pandoc diagnostics,
-* creates the distribution ZIPs in `arc42-template/dist/`, together with a `manifest.json` that lists languages (with version and date), styles, formats and every ZIP with its size and SHA-256,
+* creates the distribution ZIPs in `build/dist/`, together with a `manifest.json` that lists languages (with version and date), styles, formats and every ZIP with its size and SHA-256,
 * validates the output: the Markdown with `cmark` (warnings only) and the images of the with-help styles (fails the build).
 
 Every run starts from a clean `build/` output, so nothing from an earlier run ends up in the ZIPs. The output is reproducible: unchanged content produces byte-identical files and ZIPs (timestamps come from `SOURCE_DATE_EPOCH` or the last commit of the Golden Master outside `dist/`, not from the build time, so a merged release does not change them; every EPUB gets a fixed identifier derived from project, language and style instead of a random one).
@@ -66,8 +66,8 @@ Every run starts from a clean `build/` output, so nothing from an earlier run en
 | `make pin` | Record the checked-out arc42-template commit in this repository (a git commit on the current branch)
 
 2+| *Release*
-| `make release` | Full build, then commit the regenerated ZIPs to a new branch `dist/<TAG>` of arc42-template and push it (open the pull request from the printed link), and publish them as GitHub Release `<TAG>` (default: today, `YYYY.MM.DD`). Builds the newest template master; stops if it differs from the recorded commit outside `dist/`.
-| `make release-tools TOOLS_TAG=tools-YYYY.MM` | Publish the hand-made tool files of `dist/` (Enterprise Architect, Confluence, Rhapsody, Doxygen) as a GitHub Release that never becomes _latest_
+| `make release` | Full build, then publish the ZIPs and `manifest.json` as GitHub Release `<TAG>` of arc42-template (default: today, `YYYY.MM.DD`). Builds the newest template master; stops if its content differs from the recorded commit.
+| `make release-tools TOOLS_TAG=tools-YYYY.MM` | Publish the hand-made tool files of arc42-template `other-formats/` (Enterprise Architect, Confluence, Rhapsody, Doxygen) as a GitHub Release that never becomes _latest_
 
 2+| *Docker image and tools*
 | `make image` | Build the Docker image; rerun after changing the `Dockerfile`
@@ -76,8 +76,7 @@ Every run starts from a clean `build/` output, so nothing from an earlier run en
 | `make shell` | Interactive shell in the container; the make targets work there as well
 
 2+| *Cleanup*
-| `make clean` | Remove `build/` and `build2/` (the ZIPs are kept)
-| `make clean-dist` | Discard regenerated ZIPs in `arc42-template/dist/` and restore the committed ones
+| `make clean` | Remove `build/` (with the ZIPs in `build/dist/`) and `build2/`
 | `make fix-owner` | Linux: give files created by the container (root) back to the calling user; the targets do this automatically
 |===
 
@@ -119,17 +118,14 @@ make release REPO=you/arc42-template PRERELEASE=1     # test on your fork; a pre
 make release-tools TOOLS_TAG=tools-2026.09            # the hand-made tool files, never latest
 ----
 
-`make release` builds everything with the release tag in `manifest.json`, then
+`make release` builds everything with the release tag in `manifest.json` and publishes a GitHub Release `<TAG>` on arc42-template: every ZIP of the manifest and `manifest.json`, release notes with the version of every language, targeted at the template commit that was built. `https://github.com/arc42/arc42-template/releases/latest/download/<file>` then serves the newest file, and https://arc42.org/download links there (through `arc42.org/dl/<file>`). Nothing is committed to arc42-template.
 
-* pushes the regenerated ZIPs of `arc42-template/dist/` to a new branch `dist/<TAG>` of arc42-template, if a ZIP changed; merging the pull request updates `dist/` (kept until the download page uses the releases),
-* publishes a GitHub Release `<TAG>` with every ZIP of the manifest and `manifest.json` (not the hand-made files of `dist/`), release notes with the version of every language, targeted at the template commit that was built. `https://github.com/arc42/arc42-template/releases/latest/download/<file>` then serves the newest file.
+If the files equal those of the latest release (names and SHA-256 in `manifest.json`), nothing is published. The release targets need the GitHub CLI `gh`, logged in, on your machine. `make release-tools` publishes the hand-made tool files from the `other-formats/` folders of arc42-template; they change rarely.
 
-If no ZIP changed and the repository has a release already, nothing is published. The release targets need the GitHub CLI `gh`, logged in, on your machine. `make clean-dist` discards regenerated ZIPs you do not want to release.
-
-`make check-downloads PREFIX=<url>` requests every file of `dist/manifest.json` from a prefix and lists the missing ones; with `CHECKSUMS=1` it downloads them and compares their SHA-256 with the manifest:
+`make check-downloads PREFIX=<url>` requests every file of `build/dist/manifest.json` from a prefix and lists the missing ones; with `CHECKSUMS=1` it downloads them and compares their SHA-256 with the manifest:
 
 ----
-make check-downloads PREFIX=https://github.com/arc42/arc42-template/raw/master/dist/
+make check-downloads PREFIX=https://arc42.org/dl/
 make check-downloads PREFIX=https://github.com/arc42/arc42-template/releases/latest/download/ CHECKSUMS=1
 ----
 
