@@ -136,6 +136,34 @@ try {
         "tag and templateCommit should be absent when not set: ${plain.keySet()}"
     println "✓ Test 6 passed\n"
 
+    println "=== Test 7: template commit and timestamp ignore commits that only change the ZIPs ==="
+    def git = { String date, String... args ->
+        def cmd = ['git', '-C', fixture.path, '-c', 'user.name=test', '-c', 'user.email=test@example.org'] + (args as List)
+        def pb = new ProcessBuilder(cmd).redirectErrorStream(true)
+        pb.environment().putAll([GIT_AUTHOR_DATE: date, GIT_COMMITTER_DATE: date])
+        def p = pb.start()
+        def out = p.inputStream.text.trim()
+        assert p.waitFor() == 0, "git ${args.join(' ')} failed: ${out}"
+        out
+    }
+    def packager = packagerClass.newInstance(config, fixture)
+    new File(fixture, '.git').deleteDir()
+    git('@1751328000 +0000', 'init', '-q')
+    git('@1751328000 +0000', 'add', '-A')
+    git('@1751328000 +0000', 'commit', '-q', '-m', 'template')
+    def templateHead = git('@1751328000 +0000', 'rev-parse', 'HEAD')
+    manifestFile.write('{}', 'utf-8')
+    git('@1751414400 +0000', 'commit', '-q', '-am', 'release: only dist/')
+    assert packager.lastTemplateCommit() == [commit: templateHead, time: 1751328000L],
+        "a dist-only commit must not count: ${packager.lastTemplateCommit()}"
+    new File(fixture, 'EN/adoc/01_chapter.adoc').append('more\n', 'utf-8')
+    git('@1751500800 +0000', 'commit', '-q', '-am', 'template change')
+    assert packager.lastTemplateCommit() == [commit: git('@1751500800 +0000', 'rev-parse', 'HEAD'), time: 1751500800L],
+        "a template change must count: ${packager.lastTemplateCommit()}"
+    new File(fixture, '.git').deleteDir()
+    assert packager.lastTemplateCommit() == null, "without git there is no template commit"
+    println "✓ Test 7 passed\n"
+
     println "=== All Tests Passed! ==="
     System.exit(0)
 
