@@ -16,14 +16,14 @@ The actual template content lives in the `arc42-template` git submodule (the "Go
 make help                     # all targets and variables
 make image                    # build the Docker image (Java, Groovy, Pandoc 3.7.0.2, cmark, make, git, CJK fallback font)
 make build                    # full arc42 build: template-checkout, generate, validate
-make build UPDATE_TEMPLATE=1  # the same with the newest arc42-template master
+make build UPDATE_TEMPLATE=1  # the same with the newest arc42-template main
 make generate                 # groovy build.groovy (all phases), no checkout, no output validation
 make templates | convert | distribution   # single phases
 make validate                 # output checks: cmark (warnings only), with-help images (fatal)
 make test                     # groovy run-all-tests.groovy
 make test-lint                # one test script (templates, discovery, converter, config, lint, manifest)
 make template-checkout        # submodule at the recorded commit (git submodule update --init, in the container)
-make template-update          # submodule to the newest master
+make template-update          # submodule to the newest main
 make pin                      # commit the checked-out submodule commit (local git)
 make release                  # build, publish build/dist/ (ZIPs, manifest.json) as GitHub Release <TAG> of arc42-template
 make release-tools TOOLS_TAG=tools-2026.09   # hand-made tool files of arc42-template other-formats/ as GitHub Release that never becomes latest
@@ -33,7 +33,7 @@ make shell | versions | image-fresh
 ```
 Variables: `OPTS="..."` (options for build.groovy, see below), `FORMAT=html`, `TEMPLATE=../req42-framework` (another template repository, mounted at `/project`, output below it), `UPDATE_TEMPLATE=1`, `SOURCE_DATE_EPOCH`, `TAG` (release tag, default today `YYYY.MM.DD`), `REPO` (release repository, default `arc42/arc42-template`; a fork for tests), `PRERELEASE=1`, `TOOLS_TAG`, `DOCKER_RUN_OPTS` (extra options for `docker compose run`; the arc42-template CI runs `make templates TEMPLATE=$GITHUB_WORKSPACE DOCKER_RUN_OPTS="-e GITHUB_ACTIONS=true -e GITHUB_STEP_SUMMARY=/project/..."`). Output is written below the current directory (`build/`, ZIPs in `build/dist/`) and, on Linux, handed back to the calling user (`fix-owner`).
 
-The output validation lives in the Makefile (`_validate-markdown`, `_validate-images`) and runs in the container. `release` builds the newest template master; it stops if master differs from the recorded submodule commit outside `dist/` (the `dist/` of old releases), unless `UPDATE_TEMPLATE=1`. It builds with `--release-tag=$(TAG)` and publishes a GitHub Release with the files of `build/release/files.txt` (the ZIPs of the manifest plus `manifest.json`) and the notes of `build/release/notes.md`, targeted at the manifest's `templateCommit`. If the files (names and SHA-256) equal the `manifest.json` of the latest release, nothing is published. Nothing is committed to arc42-template; its hand-made tool files live in its `other-formats/<tool>/` folders and are published by `release-tools`. After a real release on arc42 (not `PRERELEASE`, not a fork) it sends `repository_dispatch` `template-released` to `SITE_REPO` (default `arc42/arc42.org-site`), whose workflow refreshes the download page data; a failed dispatch is a warning only.
+The output validation lives in the Makefile (`_validate-markdown`, `_validate-images`) and runs in the container. `release` builds the newest template main; it stops if main differs from the recorded submodule commit outside `dist/` (the `dist/` of old releases), unless `UPDATE_TEMPLATE=1`. It builds with `--release-tag=$(TAG)` and publishes a GitHub Release with the files of `build/release/files.txt` (the ZIPs of the manifest plus `manifest.json`) and the notes of `build/release/notes.md`, targeted at the manifest's `templateCommit`. If the files (names and SHA-256) equal the `manifest.json` of the latest release, nothing is published. Nothing is committed to arc42-template; its hand-made tool files live in its `other-formats/<tool>/` folders and are published by `release-tools`. After a real release on arc42 (not `PRERELEASE`, not a fork) it sends `repository_dispatch` `template-released` to `SITE_REPO` (default `arc42/arc42.org-site`), whose workflow refreshes the download page data; a failed dispatch is a warning only.
 
 ### CLI Options
 Options of `build.groovy`, passed through make as `OPTS="..."` (e.g. `make templates OPTS=--lint=warn`):
@@ -197,5 +197,5 @@ make shell
 ## Git Workflow
 When updating templates:
 1. Template changes (including translations) are made in arc42-template via pull requests; its CI validates them with this generator.
-2. When arc42-template master moves, Dependabot opens a pull request here that moves the submodule pin; the CI builds it. Manually: `make template-update && make pin`.
+2. When arc42-template main moves, Dependabot opens a pull request here that moves the submodule pin; the CI builds it. Manually: `make template-update && make pin`.
 3. `make release` builds and publishes the ZIPs as GitHub Release of arc42-template; arc42.org/dl/ serves the latest release (decision: ADR 0012 in arc42/meta.arc42.org).

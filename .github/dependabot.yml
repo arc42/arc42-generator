@@ -1,4 +1,4 @@
-# Opens a pull request whenever arc42-template master has moved past the commit this
+# Opens a pull request whenever arc42-template main has moved past the commit this
 # repository pins. The CI below builds that pull request, so a green check means the new
 # golden master passes the validation and converts into every format.
 version: 2
