@@ -62,11 +62,11 @@ Every run starts from a clean `build/` output, so nothing from an earlier run en
 
 2+| *Golden Master (arc42-template submodule)*
 | `make template-checkout` | Check out arc42-template at the recorded commit (local changes are kept; the target stops instead)
-| `make template-update` | Move arc42-template to the newest master, for a build of the latest translations
+| `make template-update` | Move arc42-template to the newest main, for a build of the latest translations
 | `make pin` | Record the checked-out arc42-template commit in this repository (a git commit on the current branch)
 
 2+| *Release*
-| `make release` | Full build, then publish the ZIPs and `manifest.json` as GitHub Release `<TAG>` of arc42-template (default: today, `YYYY.MM.DD`). Builds the newest template master; stops if its content differs from the recorded commit.
+| `make release` | Full build, then publish the ZIPs and `manifest.json` as GitHub Release `<TAG>` of arc42-template (default: today, `YYYY.MM.DD`). Builds the newest template main; stops if its content differs from the recorded commit.
 | `make release-tools TOOLS_TAG=tools-YYYY.MM` | Publish the hand-made tool files of arc42-template `other-formats/` (Enterprise Architect, Confluence, Rhapsody, Doxygen) as a GitHub Release that never becomes _latest_
 
 2+| *Docker image and tools*
@@ -87,7 +87,7 @@ make convert FORMAT=html                       # one format only
 make templates OPTS="--lint=warn"              # report Golden Master problems without failing
 make convert OPTS="--failure-level=error"      # fail only on errors, not on warnings (default: warn; also fatal, none)
 make generate OPTS="--parallel=false"          # sequential conversion
-make build UPDATE_TEMPLATE=1                   # build the newest arc42-template master instead of the recorded commit
+make build UPDATE_TEMPLATE=1                   # build the newest arc42-template main instead of the recorded commit
 make generate TEMPLATE=../req42-framework      # another template repository, see below
 SOURCE_DATE_EPOCH=1751846400 make generate     # fixed timestamp for DOCX/EPUB/ZIP entries
 make templates DOCKER_RUN_OPTS="-e FOO=bar"    # extra options for docker compose run (the arc42-template CI passes GITHUB_ACTIONS this way)
@@ -99,10 +99,10 @@ make templates DOCKER_RUN_OPTS="-e FOO=bar"    # extra options for docker compos
 
 Template content, including new translations, is developed in https://github.com/arc42/arc42-template[arc42-template]. Its CI validates every pull request with this generator and shows each problem as annotation on the file and line.
 
-This repository records the arc42-template commit it builds (the submodule "pin"), so the same generator commit always produces the same ZIPs. When arc42-template master moves, Dependabot opens a pull request here that moves the pin; the CI of this repository builds it. To try a template change locally:
+This repository records the arc42-template commit it builds (the submodule "pin"), so the same generator commit always produces the same ZIPs. When arc42-template main moves, Dependabot opens a pull request here that moves the pin; the CI of this repository builds it. To try a template change locally:
 
 ----
-make template-update          # newest arc42-template master (or: git -C arc42-template checkout <branch>)
+make template-update          # newest arc42-template main (or: git -C arc42-template checkout <branch>)
 make generate                 # build what is checked out; 'make build' would go back to the recorded commit
 make pin                      # optional: record the commit, then open a pull request
 ----

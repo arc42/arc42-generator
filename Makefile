@@ -10,7 +10,7 @@
 #
 #   make help                                    all targets and variables
 #   make build                                   full arc42 build: checkout, validation, all formats, ZIPs, output checks
-#   make build UPDATE_TEMPLATE=1                 the same with the newest arc42-template master
+#   make build UPDATE_TEMPLATE=1                 the same with the newest arc42-template main
 #   make test                                    all test scripts; make test-lint etc. for one
 #   make convert FORMAT=html                     one format only
 #   make templates OPTS="--lint=warn"            options for build.groovy
@@ -43,6 +43,8 @@ PRERELEASE_ON := $(filter 1 true yes,$(PRERELEASE))
 HAS_TEMPLATE_RELEASE = gh release list -R $(REPO) --exclude-pre-releases --exclude-drafts --limit 100 --json tagName -q '.[].tagName' | grep -qE '^[0-9]{4}\.[0-9]{2}\.[0-9]{2}(\.[0-9]+)?$$'
 
 SUBMODULE := arc42-template
+# default branch of arc42-template (main): asked from GitHub on first use, then remembered
+TEMPLATE_BRANCH ?= $(eval TEMPLATE_BRANCH := $(or $(shell git ls-remote --symref https://github.com/arc42/arc42-template.git HEAD 2>/dev/null | sed -n 's|^ref: refs/heads/\([^[:space:]]*\).*|\1|p'),main))$(TEMPLATE_BRANCH)
 # the distribution ZIPs and manifest.json (distribution.targetPath in buildconfig.groovy)
 DIST_DIR := build/dist
 
@@ -98,7 +100,7 @@ help: ## Show this help
 	@echo '  OPTS="..."         options for build.groovy, e.g. --lint=warn, --failure-level=error|fatal|none, --parallel=false'
 	@echo "  FORMAT=html        convert one format only (templates, convert, generate, build)"
 	@echo "  TEMPLATE=path      another template repository with its own buildconfig.groovy (not for build, release)"
-	@echo "  UPDATE_TEMPLATE=1  build: use the newest arc42-template master instead of the recorded commit"
+	@echo "  UPDATE_TEMPLATE=1  build: use the newest arc42-template main instead of the recorded commit"
 	@echo "  SOURCE_DATE_EPOCH  fixed timestamp for DOCX/EPUB/ZIP entries (default: last golden master commit outside dist/)"
 	@echo "  TAG=2026.09.30     release: tag of the GitHub Release (default: today; a second one: TAG=YYYY.MM.DD.2)"
 	@echo "  REPO=owner/repo    release, release-tools: repository of the release (default: arc42/arc42-template)"
@@ -183,9 +185,9 @@ template-checkout: ## Check out arc42-template at the commit recorded in this re
 	  done; \
 	  echo "✗ Could not check out $(SUBMODULE). Local changes? See: git -C $(SUBMODULE) status" >&2; exit 1'
 
-template-update: template-checkout ## Move arc42-template to the newest master (record it with: make pin)
-	@$(RUN) sh -c 'git -C $(SUBMODULE) checkout -q master && git -C $(SUBMODULE) pull -q --ff-only && \
-	  git -C $(SUBMODULE) log -1 --format="✓ $(SUBMODULE) at master %h (%ad) %s" --date=short || { \
+template-update: template-checkout ## Move arc42-template to the newest main (record it with: make pin)
+	@$(RUN) sh -c 'git -C $(SUBMODULE) fetch -q origin && git -C $(SUBMODULE) checkout -q $(TEMPLATE_BRANCH) && git -C $(SUBMODULE) pull -q --ff-only && \
+	  git -C $(SUBMODULE) log -1 --format="✓ $(SUBMODULE) at $(TEMPLATE_BRANCH) %h (%ad) %s" --date=short || { \
 	  echo "✗ $(SUBMODULE) has local changes. See: git -C $(SUBMODULE) status" >&2; exit 1; }'
 	@echo "  Builds use this commit until the next template-checkout; to record it: make pin"
 
@@ -207,17 +209,17 @@ endif
 	@if gh release view "$(TAG)" -R $(REPO) >/dev/null 2>&1 || gh api "repos/$(REPO)/git/ref/tags/$(TAG)" >/dev/null 2>&1; then \
 	  echo "✗ Tag $(TAG) exists on $(REPO). A second release on the same day: make release TAG=$(TAG).2" >&2; exit 1; \
 	fi
-	@git -C $(SUBMODULE) fetch -q origin master
+	@git -C $(SUBMODULE) fetch -q origin $(TEMPLATE_BRANCH)
 	@pinned=$$(git rev-parse HEAD:$(SUBMODULE)); \
-	if [ -n "$(filter 1 true yes,$(UPDATE_TEMPLATE))" ] || [ "$$pinned" = "$$(git -C $(SUBMODULE) rev-parse origin/master)" ]; then \
+	if [ -n "$(filter 1 true yes,$(UPDATE_TEMPLATE))" ] || [ "$$pinned" = "$$(git -C $(SUBMODULE) rev-parse origin/$(TEMPLATE_BRANCH))" ]; then \
 	  exit 0; \
-	elif git -C $(SUBMODULE) diff --quiet "$$pinned" origin/master -- . ':(exclude)dist'; then \
-	  echo "✓ $(SUBMODULE) master differs from the recorded commit $$(git -C $(SUBMODULE) rev-parse --short $$pinned) only in dist/: releasing from master"; \
+	elif git -C $(SUBMODULE) diff --quiet "$$pinned" origin/$(TEMPLATE_BRANCH) -- . ':(exclude)dist'; then \
+	  echo "✓ $(SUBMODULE) $(TEMPLATE_BRANCH) differs from the recorded commit $$(git -C $(SUBMODULE) rev-parse --short $$pinned) only in dist/: releasing from $(TEMPLATE_BRANCH)"; \
 	else \
-	  echo "✗ The recorded $(SUBMODULE) commit is not the newest master: the ZIPs would not match the template." >&2; \
+	  echo "✗ The recorded $(SUBMODULE) commit is not the newest $(TEMPLATE_BRANCH): the ZIPs would not match the template." >&2; \
 	  echo "  Merge the pending pin update (Dependabot) first, or: make release UPDATE_TEMPLATE=1" >&2; exit 1; \
 	fi
-	@# the same template content as recorded (or UPDATE_TEMPLATE): build from master
+	@# the same template content as recorded (or UPDATE_TEMPLATE): build from $(TEMPLATE_BRANCH)
 	@$(MAKE) --no-print-directory build UPDATE_TEMPLATE=1 OPTS="$(strip $(OPTS) --release-tag=$(TAG))"
 	@# nothing to release: the files (names and SHA-256) equal the manifest of the latest release;
 	@# a pre-release is always published. After a real release on arc42, the website is notified
