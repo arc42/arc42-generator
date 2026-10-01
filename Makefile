@@ -84,7 +84,7 @@ TEST_SCRIPTS := $(patsubst test-%.groovy,%,$(wildcard test-*.groovy))
         build generate templates convert distribution validate \
         test check \
         template-checkout template-update pin release release-tools check-downloads \
-        clean fix-owner host-only _gh-check _validate-markdown _validate-images
+        clean fix-owner host-only _gh-check _validate-markdown _validate-images _validate-asciidoc
 
 ##@ Help
 
@@ -156,8 +156,8 @@ distribution: ## Phase 4: create the distribution ZIPs
 	$(RUN) groovy build.groovy distribution $(BUILD_OPTS)
 	$(FIX_OWNER)
 
-validate: ## Check the output: Markdown with cmark (warnings only), images of the with-help styles (fails)
-	$(RUN) make --no-print-directory _validate-markdown _validate-images BUILD_DIR=$(BUILD_DIR)
+validate: ## Check the output: Markdown with cmark (warnings only), images of the with-help styles and AsciiDoc includes (fail)
+	$(RUN) make --no-print-directory _validate-markdown _validate-images _validate-asciidoc BUILD_DIR=$(BUILD_DIR)
 
 ##@ Tests
 
@@ -345,3 +345,23 @@ _validate-images:
 	  echo "✗ $$problems image problem(s) in the with-help styles (see above): the output in build/ is incomplete" >&2; exit 1; \
 	fi; \
 	echo "✓ Image directories present, all image references valid ($$checked Markdown with-help file(s) checked)"
+
+# AsciiDoc output: every include of the main file (outside //// comment blocks, which Asciidoctor
+# skips) resolves inside its output directory, so the asciidoc ZIP renders on its own
+_validate-asciidoc:
+	@echo "==> Includes of the AsciiDoc output (fails the build)"
+	@problems=0; checked=0; \
+	for main in $(BUILD_DIR)/*/asciidoc/*/*.adoc; do \
+	  [ -f "$$main" ] || continue; \
+	  checked=$$((checked + 1)); \
+	  dir=$$(dirname "$$main"); \
+	  while IFS= read -r inc; do \
+	    case "$$inc" in *../*) echo "  ✗ Include outside the output in $${main#$(BUILD_DIR)/}: $$inc"; problems=$$((problems + 1)); continue ;; esac; \
+	    [ -f "$$dir/$$inc" ] || { echo "  ✗ Missing include in $${main#$(BUILD_DIR)/}: $$inc"; problems=$$((problems + 1)); }; \
+	  done < <(awk '/^\/\/\/\/+[[:space:]]*$$/ {c = !c; next} !c && sub(/^include::/, "") {sub(/\[.*/, ""); print}' "$$main"); \
+	done; \
+	if [ $$checked -eq 0 ]; then echo "⚠ No AsciiDoc output under $(BUILD_DIR)/*/asciidoc/ (nothing validated)"; exit 0; fi; \
+	if [ $$problems -ne 0 ]; then \
+	  echo "✗ $$problems include problem(s) in the AsciiDoc output (see above): the asciidoc ZIPs would not render" >&2; exit 1; \
+	fi; \
+	echo "✓ All includes of $$checked AsciiDoc main file(s) resolve inside their output directory"

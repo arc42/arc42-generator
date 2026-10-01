@@ -311,8 +311,19 @@ class Converter {
         
         // Adjust include paths for AsciiDoc output:
         // - Files are in src/ subdirectory, so references need src/ prefix
-        mainContent = mainContent.replaceAll('include::', 'include::src/')
-        
+        // - Files outside the template (../../../common/styles/arc42-help-style.adoc) are not
+        //   part of the ZIP: copy them into src/ as well, otherwise the include is not found
+        mainContent = mainContent.replaceAll(/(?m)^include::([^\[\r\n]+)\[/) { all, path ->
+            if (path.contains('../')) {
+                def external = new File(srcDir, path).canonicalFile
+                if (external.isFile()) {
+                    new File(targetSrcDir, external.name).write(external.getText('utf-8'), 'utf-8')
+                    return "include::src/${external.name}["
+                }
+            }
+            return "include::src/${path}["
+        }
+
         def targetMainFile = new File(projectRoot, "${outputDir}/${projectName}.adoc")
         targetMainFile.write(mainContent, 'utf-8')
 

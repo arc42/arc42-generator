@@ -38,7 +38,7 @@ make test       # all test scripts
 * validates the Golden Master (conditionals, help blocks, the `arc42help` attribute, images, version.properties) and stops on errors,
 * generates the templates in all languages and styles and converts them to 15 output formats (HTML, PDF, Markdown variants, DOCX, EPUB, LaTeX, reStructuredText, Textile, DocBook, AsciiDoc), stopping on Asciidoctor or Pandoc diagnostics,
 * creates the distribution ZIPs in `build/dist/`, together with a `manifest.json` that lists languages (with version and date), styles, formats and every ZIP with its size and SHA-256,
-* validates the output: the Markdown with `cmark` (warnings only) and the images of the with-help styles (fails the build).
+* validates the output: the Markdown with `cmark` (warnings only), the images of the with-help styles and the includes of the AsciiDoc output (both fail the build).
 
 Every run starts from a clean `build/` output, so nothing from an earlier run ends up in the ZIPs. The output is reproducible: unchanged content produces byte-identical files and ZIPs (timestamps come from `SOURCE_DATE_EPOCH` or the last commit of the Golden Master outside `dist/`, not from the build time, so a merged release does not change them; every EPUB gets a fixed identifier derived from project, language and style instead of a random one).
 
@@ -54,7 +54,7 @@ Every run starts from a clean `build/` output, so nothing from an earlier run en
 | `make templates` | Phase 1: validate the Golden Master, generate the templates into `build/src_gen/`
 | `make convert` | Phases 2-3: discover and convert the templates
 | `make distribution` | Phase 4: create the distribution ZIPs
-| `make validate` | Validate the output: Markdown with `cmark` (warnings only), images of the with-help styles (fails)
+| `make validate` | Validate the output: Markdown with `cmark` (warnings only), images of the with-help styles and AsciiDoc includes (fail)
 
 2+| *Tests*
 | `make test` | All test scripts
