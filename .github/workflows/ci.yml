@@ -1,11 +1,11 @@
 # Tests and full arc42 build in the Docker image, for every pull request (including the
-# submodule updates from Dependabot) and every push to master.
+# submodule updates from Dependabot) and every push to main.
 name: CI
 
 on:
   pull_request:
   push:
-    branches: [master]
+    branches: [main]
 
 permissions:
   contents: read
