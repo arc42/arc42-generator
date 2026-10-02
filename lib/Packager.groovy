@@ -217,7 +217,7 @@ class Packager {
      * The last commit of the golden master that changed anything outside the distribution directory,
      * as [commit: hash, time: commit time in seconds], or null without git. A merged release only adds
      * ZIPs; it must not change the timestamps or the templateCommit of the next build, otherwise every
-     * release would rewrite all ZIPs again. First-parent history: the merge commit on master counts,
+     * release would rewrite all ZIPs again. First-parent history: the merge commit on main counts,
      * not a commit of the merged branch.
      */
     /**
