@@ -10,6 +10,8 @@ FROM alpine:3.20 AS builder
 # - wget & unzip: For downloading Groovy and pandoc
 # - cmark: CommonMark markdown validator
 # - font-droid-nonlatin: DroidSansFallbackFull.ttf, the Chinese fallback font of the PDF output
+# - font-noto: the full Noto Serif, fallback font of the PDF output for Latin letters the bundled
+#   Noto Serif subset lacks (e.g. Azerbaijani Ə)
 # pandoc is deliberately NOT taken from the Alpine repository (unpinned
 # version); it is installed below from the official GitHub release, pinned to
 # the same version everywhere, and verified against a SHA-256 checksum.
@@ -20,7 +22,8 @@ RUN apk add --no-cache \
     wget \
     unzip \
     cmark \
-    font-droid-nonlatin
+    font-droid-nonlatin \
+    font-noto
 
 # Install pandoc from the official release tarball (pinned + checksum-verified).
 # The release binaries are statically linked, so they run on Alpine (musl).
@@ -101,6 +104,9 @@ COPY --from=builder /usr/local/bin/pandoc /usr/local/bin/pandoc
 
 # Fallback font of the PDF output for Chinese (lib/pdf-theme.yml); only this file of the package is needed
 COPY --from=builder /usr/share/fonts/droid-nonlatin/DroidSansFallbackFull.ttf /usr/share/fonts/droid-nonlatin/
+# Fallback font of the PDF output for Latin letters outside the bundled Noto Serif subset (e.g. Azerbaijani Ə)
+COPY --from=builder /usr/share/fonts/noto/NotoSerif-Regular.ttf /usr/share/fonts/noto/NotoSerif-Bold.ttf \
+     /usr/share/fonts/noto/NotoSerif-Italic.ttf /usr/share/fonts/noto/NotoSerif-BoldItalic.ttf /usr/share/fonts/noto/
 
 # Copy Groovy installation from builder
 COPY --from=builder /opt/groovy-5.0.3 /opt/groovy-5.0.3

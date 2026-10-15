@@ -14,7 +14,7 @@ The actual template content lives in the `arc42-template` git submodule (the "Go
 
 ```bash
 make help                     # all targets and variables
-make image                    # build the Docker image (Java, Groovy, Pandoc 3.7.0.2, cmark, make, git, CJK fallback font)
+make image                    # build the Docker image (Java, Groovy, Pandoc 3.7.0.2, cmark, make, git, PDF fallback fonts)
 make build                    # full arc42 build: template-checkout, generate, validate
 make build UPDATE_TEMPLATE=1  # the same with the newest arc42-template main
 make generate                 # groovy build.groovy (all phases), no checkout, no output validation
@@ -77,7 +77,7 @@ Main orchestration script that ties everything together. Supports CLI arguments 
 
 #### `lib/Converter.groovy`
 - **AsciidoctorJ Integration**: Direct HTML, PDF and DocBook conversion
-- **PDF**: AsciidoctorJ PDF with `lib/pdf-theme.yml` (default theme plus the fallback font Droid Sans Fallback for Chinese, installed in the Docker image under `/usr/share/fonts/droid-nonlatin`); images are embedded, so the PDF ZIP holds a single file
+- **PDF**: AsciidoctorJ PDF with `lib/pdf-theme.yml` (default theme plus the fallback fonts full Noto Serif, for Latin letters such as the Azerbaijani Ə that the bundled Noto Serif subset lacks, and Droid Sans Fallback for Chinese, installed in the Docker image under `/usr/share/fonts/noto` and `/usr/share/fonts/droid-nonlatin`); images are embedded, so the PDF ZIP holds a single file
 - **Pandoc Integration**: Two-step conversion (AsciiDoc → DocBook → target format)
 - **Multi-page formats**: one DocBook and one output file per chapter; the feature attributes of the style (e.g. `arc42help` for with-help) are set for the per-chapter conversion
 - **Diagnostics**: Asciidoctor log records and Pandoc's stderr are collected in `diagnostics`, printed after `convertAll()` (deduplicated) and evaluated by `build.groovy` against `--failure-level`
@@ -118,7 +118,7 @@ The Golden Master uses AsciiDoc role attributes to mark content (prefix set by `
 - `lib/Templates.groovy` removes unwanted features using regex to create template variants
 
 ## System Requirements
-Only `make` and Docker with Compose v2. The Docker image contains Java 21, Groovy 5.0.3, Pandoc 3.7.0.2 (pinned, checksum-verified), cmark, make, git and the PDF fallback font for Chinese (Droid Sans Fallback). The Groovy scripts need Groovy 4.0+ and Java 11+ if they are ever run outside the image.
+Only `make` and Docker with Compose v2. The Docker image contains Java 21, Groovy 5.0.3, Pandoc 3.7.0.2 (pinned, checksum-verified), cmark, make, git and the PDF fallback fonts (full Noto Serif, Droid Sans Fallback for Chinese). The Groovy scripts need Groovy 4.0+ and Java 11+ if they are ever run outside the image.
 
 ## Output Locations
 - `build/src_gen/`: Generated AsciiDoc templates (plain, with-help variants); deleted at the start of the `templates` phase
@@ -133,7 +133,7 @@ Only `make` and Docker with Compose v2. The Docker image contains Java 21, Groov
 make test               # all test scripts (groovy run-all-tests.groovy in the container)
 make test-templates     # template generation
 make test-discovery     # template discovery
-make test-converter     # format conversion, multi-page help text, clean outputs, diagnostics, reproducible DOCX/EPUB/PDF, Chinese PDF font
+make test-converter     # format conversion, multi-page help text, clean outputs, diagnostics, reproducible DOCX/EPUB/PDF, Chinese and Azerbaijani PDF fonts
 make test-config        # building a non-arc42 project from its own config file
 make test-lint          # golden master validation on a fixture, ZH-TW discovery, GitHub annotations and report
 make test-manifest      # manifest.json: languages, styles, formats, sha256 of every ZIP, reproducibility, release notes, template commit

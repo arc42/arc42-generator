@@ -37,9 +37,9 @@ class Converter {
     /** Severities from least to most severe; anything unknown is treated like ERROR */
     static final List<Severity> SEVERITY_ORDER = [Severity.DEBUG, Severity.INFO, Severity.WARN, Severity.ERROR, Severity.FATAL]
 
-    /** PDF theme (relative to the generator directory) and the directory of its fallback font (Chinese), installed in the Docker image */
+    /** PDF theme (relative to the generator directory) and the directories of its fallback fonts (full Noto Serif, Chinese), installed in the Docker image */
     static final String PDF_THEME = 'lib/pdf-theme.yml'
-    static final String PDF_FALLBACK_FONT_DIR = '/usr/share/fonts/droid-nonlatin'
+    static final List<String> PDF_FALLBACK_FONT_DIRS = ['/usr/share/fonts/noto', '/usr/share/fonts/droid-nonlatin']
 
     /**
      * Unix timestamp (seconds) that Pandoc uses for the dates inside DOCX and EPUB files instead of "now",
@@ -151,7 +151,7 @@ class Converter {
         // images are read from the template's own images directory instead of a copy next to the output
         if (template.imagesDir) attributes.put('imagesdir', new File(template.imagesDir).canonicalPath)
         attributes.put('pdf-theme', new File(PDF_THEME).canonicalPath)
-        attributes.put('pdf-fontsdir', "GEM_FONTS_DIR;${PDF_FALLBACK_FONT_DIR}".toString())
+        attributes.put('pdf-fontsdir', (['GEM_FONTS_DIR'] + PDF_FALLBACK_FONT_DIRS).join(';'))
 
         def options = Options.builder()
             .toFile(outputFile)
