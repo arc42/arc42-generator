@@ -176,7 +176,7 @@ try {
     converter.sourceDateEpoch = null
     println "✓ Test 14 passed\n"
 
-    println "=== Test 15: PDF output is reproducible, embeds the images and uses the fallback font for Chinese ==="
+    println "=== Test 15: PDF output is reproducible, embeds the images and uses the fallback fonts for Chinese and Azerbaijani ==="
     def pdfA = converter.convertTemplate(enHelp, 'pdf', 'build2/test')
     assert pdfA != null && new File(pdfA).name == "${config.project.name}-EN.pdf", "PDF conversion should succeed: ${pdfA}"
     def pdfBytesA = new File(pdfA).bytes
@@ -190,6 +190,13 @@ try {
         def zhPdf = new File(converter.convertTemplate(zhPlain, 'pdf', 'build2/test'))
         assert new String(zhPdf.bytes, 'ISO-8859-1').contains('DroidSansFallback'),
             "Chinese text needs the fallback font, otherwise it renders as empty boxes"
+    }
+    def azPlain = templates.find { it.language == 'AZ' && it.style == 'plain' }
+    if (azPlain) {
+        assert converter.convertTemplate(azPlain, 'pdf', 'build2/test') != null, "AZ PDF conversion should succeed"
+        // Azerbaijani Ə is not in the bundled Noto Serif subset; without the full Noto Serif as fallback it is left out
+        assert !converter.diagnostics.any { it.message?.contains('Could not locate the character') },
+            "no character of the PDF output may be missing from its fonts: ${converter.diagnostics*.message}"
     }
     println "✓ Test 15 passed\n"
 

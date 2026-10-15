@@ -52,6 +52,7 @@ distribution {
 
     // language names for manifest.json; a language without an entry is listed by its code
     languageNames = [
+            AZ : 'Azərbaycanca',
             CZ : 'Čeština',
             DE : 'Deutsch',
             EN : 'English',
