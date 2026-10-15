@@ -62,6 +62,7 @@ distribution {
             NL : 'Nederlands',
             PT : 'Português',
             RU : 'Русский',
+            TR : 'Türkçe',
             UKR: 'Українська',
             ZH : '简体中文',
             'ZH-TW': '繁體中文',
