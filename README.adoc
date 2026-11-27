@@ -60,7 +60,7 @@ Every run starts from a clean `build/` output, so nothing from an earlier run en
 
 2+| *Tests*
 | `make test` | All test scripts
-| `make test-<name>` | One test script: `templates`, `discovery`, `converter`, `config`, `lint`, `manifest`, `downloads`, `outputcheck`
+| `make test-<name>` | One test script: `templates`, `discovery`, `converter`, `config`, `lint`, `manifest`, `downloads`, `cli`, `outputcheck`
 
 2+| *Golden Master (arc42-template submodule)*
 | `make template-checkout` | Check out arc42-template at the recorded commit (local changes are kept; the target stops instead)

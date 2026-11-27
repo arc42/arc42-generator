@@ -23,6 +23,9 @@
  *   groovy build.groovy --failure-level=error   # Fail only on Asciidoctor/Pandoc errors (default: warn)
  *   groovy build.groovy --lint=warn             # Report golden master problems but do not fail on them
  *   groovy build.groovy --release-tag=2026.09.29   # Tag written to manifest.json (only set by make release)
+ *   groovy build.groovy --help                  # Phases and options
+ *
+ * An unknown phase, option or format ends with exit code 2 before anything is built.
  *
  * Every run starts from a clean output: the templates phase removes build/src_gen/, the convert
  * phase removes the output directories of the formats it converts.
@@ -55,31 +58,57 @@ def failOnLintErrors = true
 // Tag of the release the ZIPs are built for, written to manifest.json
 def releaseTag = null
 
-if (cliArgs) {
-    targetPhase = cliArgs.find { !it.startsWith('--') } ?: 'all'
-    useParallel = !cliArgs.contains('--parallel=false')
-    def formatArg = cliArgs.find { it.startsWith('--format=') }
-    if (formatArg) {
-        targetFormat = formatArg.split('=')[1]
-    }
-    def configArg = cliArgs.find { it.startsWith('--config=') }
-    if (configArg) {
-        configPath = configArg.substring('--config='.length())
-    }
-    def failureArg = cliArgs.find { it.startsWith('--failure-level=') }
-    if (failureArg) {
-        failureLevel = failureArg.substring('--failure-level='.length()).toLowerCase()
-        if (!(failureLevel in ['warn', 'error', 'fatal', 'none'])) {
-            println "✗ Unknown --failure-level '${failureLevel}', expected warn, error, fatal or none"
-            System.exit(2)
-        }
-    }
-    failOnLintErrors = !cliArgs.contains('--lint=warn')
-    def releaseTagArg = cliArgs.find { it.startsWith('--release-tag=') }
-    if (releaseTagArg) {
-        releaseTag = releaseTagArg.substring('--release-tag='.length())
-    }
+// Every argument must be known: a typo must not start a different build than the one asked for
+def PHASES = ['all', 'templates', 'convert', 'distribution']
+def VALUE_OPTIONS = ['--format=', '--config=', '--failure-level=', '--release-tag=']
+def FLAG_OPTIONS = ['--parallel=false', '--parallel=true', '--lint=warn']
+def usage = """Usage: groovy build.groovy [${PHASES.join('|')}] [options]
+  --format=<format>          convert and package one format only
+  --parallel=false           no parallel execution
+  --config=<file>            config file (default: buildconfig.groovy)
+  --failure-level=<level>    warn (default), error, fatal or none
+  --lint=warn                report golden master problems instead of failing on them
+  --release-tag=<tag>        tag written to manifest.json"""
+def usageError = { String message ->
+    println "✗ ${message}\n\n${usage}"
+    System.exit(2)
 }
+
+if (cliArgs.any { it in ['--help', '-h'] }) {
+    println usage
+    System.exit(0)
+}
+def phaseArgs = cliArgs.findAll { !it.startsWith('-') }
+def unknownOptions = cliArgs.findAll { arg ->
+    arg.startsWith('-') && !(arg in FLAG_OPTIONS) && !VALUE_OPTIONS.any { arg.startsWith(it) }
+}
+if (unknownOptions) {
+    usageError("Unknown option ${unknownOptions.join(', ')}")
+}
+if (phaseArgs.size() > 1) {
+    usageError("More than one phase: ${phaseArgs.join(', ')}")
+}
+if (phaseArgs && !(phaseArgs[0] in PHASES)) {
+    usageError("Unknown phase '${phaseArgs[0]}', expected ${PHASES.join(', ')}")
+}
+def optionValue = { String option ->
+    def arg = cliArgs.find { it.startsWith(option) }
+    if (arg == null) return null
+    def value = arg.substring(option.length())
+    if (!value) usageError("${option} needs a value")
+    return value
+}
+
+targetPhase = phaseArgs ? phaseArgs[0] : 'all'
+useParallel = !cliArgs.contains('--parallel=false')
+targetFormat = optionValue('--format=')
+configPath = optionValue('--config=') ?: configPath
+failureLevel = optionValue('--failure-level=')?.toLowerCase() ?: failureLevel
+if (!(failureLevel in ['warn', 'error', 'fatal', 'none'])) {
+    usageError("Unknown --failure-level '${failureLevel}', expected warn, error, fatal or none")
+}
+failOnLintErrors = !cliArgs.contains('--lint=warn')
+releaseTag = optionValue('--release-tag=')
 
 println """
 ╔═══════════════════════════════════════════════════════════════════════════╗
@@ -120,6 +149,11 @@ try {
     println "  Templates: ${config.goldenMaster.templateStyles.keySet().size()} styles"
     println "  Formats: ${formats.size()} (${formats.take(5).join(', ')}${formats.size() > 5 ? '...' : ''})"
     println ""
+
+    if (targetFormat && !(targetFormat in formats)) {
+        println "✗ Unknown --format '${targetFormat}', the config defines: ${formats.join(', ')}"
+        System.exit(2)
+    }
 } catch (Exception e) {
     println "✗ Failed to load ${configPath}: ${e.message}"
     System.exit(1)
@@ -292,7 +326,11 @@ if (targetPhase in ['all', 'distribution']) {
 
         def formatsToPackage = targetFormat ? [targetFormat] : (config.formats.keySet() as List)
 
-        packager.createAllDistributions(discoveredTemplates, formatsToPackage, useParallel)
+        def packaging = packager.createAllDistributions(discoveredTemplates, formatsToPackage, useParallel)
+        if (packaging.failed > 0) {
+            println "\n✗ Distribution creation failed: ${packaging.failed} ZIP file(s) could not be written"
+            System.exit(1)
+        }
 
     } catch (Exception e) {
         println "\n✗ Distribution creation failed: ${e.message}"

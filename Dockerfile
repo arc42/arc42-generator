@@ -73,14 +73,15 @@ WORKDIR /workspace
 # Copy project files
 COPY . /workspace
 
-# Pre-download Groovy dependencies to cache them in the image
+# Pre-download Groovy dependencies to cache them in the image; a failed download fails the image
+# build (otherwise every container would download them again, or fail without network).
 # Then clean up unnecessary files (source JARs, javadocs) to save space
 RUN groovy ./init-groovy-deps.groovy 2>&1 && \
     echo "Cleaning up Groovy Grape cache..." && \
-    find /root/.groovy/grapes -name "*-sources.jar" -delete 2>/dev/null || true && \
-    find /root/.groovy/grapes -name "*-javadoc.jar" -delete 2>/dev/null || true && \
-    find /root/.groovy/grapes -type d -name "cache" -exec rm -rf {} + 2>/dev/null || true && \
-    echo "Cleanup complete" || echo "Warning: Could not pre-cache dependencies"
+    { find /root/.groovy/grapes -name "*-sources.jar" -delete 2>/dev/null; \
+      find /root/.groovy/grapes -name "*-javadoc.jar" -delete 2>/dev/null; \
+      find /root/.groovy/grapes -type d -name "cache" -exec rm -rf {} + 2>/dev/null; \
+      echo "Cleanup complete"; }
 
 # ============================================================================
 # Stage 2: Runtime - Minimal image with only what's needed to run builds

@@ -23,7 +23,7 @@ make validate                 # output checks, all fatal: content of every forma
 make manifest-save            # keep build/dist/manifest.json as baseline-manifest.json (BASE=<file>)
 make manifest-diff            # ZIPs of this build that differ (name, SHA-256) from the saved manifest; fails if any differ
 make test                     # groovy run-all-tests.groovy
-make test-lint                # one test script (templates, discovery, converter, config, lint, manifest, downloads, outputcheck)
+make test-lint                # one test script (templates, discovery, converter, config, lint, manifest, downloads, cli, outputcheck)
 make template-checkout        # submodule at the recorded commit (git submodule update --init, in the container)
 make template-update          # submodule to the newest main
 make pin                      # commit the checked-out submodule commit (local git)
@@ -46,6 +46,9 @@ Options of `build.groovy`, passed through make as `OPTS="..."` (e.g. `make templ
 - **Failure level**: `--failure-level=warn|error|fatal|none` (default `warn`): Asciidoctor and Pandoc diagnostics at this level or above fail the build
 - **Lint**: `--lint=warn`: report golden master problems (unbalanced `ifdef`, help blocks without `ifdef`, `ifdef::arc42help[]` without `:arc42help:` being set, missing images, incomplete `version.properties`) instead of failing on them
 - **Release tag**: `--release-tag=2026.09.29`: tag written to `manifest.json` (set by the release, left out otherwise)
+- **Help**: `--help`
+
+An unknown phase, option or format ends with exit code 2 before anything is built.
 
 **Changing the generator**: output is reproducible, so compare before and after. `make build && make manifest-save` on the old state, `make build && make manifest-diff` on the new one (same arc42-template commit): a refactoring changes no ZIP, an intended change exactly the ZIPs it claims. The CI lists the differing ZIPs of every pull request in the job summary.
 
@@ -70,8 +73,8 @@ Main orchestration script that ties everything together. Supports CLI arguments 
 
 #### `lib/Templates.groovy`
 - **Language Auto-Discovery**: Scans `arc42-template/` for language directories matching `/^[A-Z]{2,}(-[A-Z]{2,})?$/` (e.g. `EN`, `UKR`, `ZH-TW`)
-- **Golden Master Validation**: `validateGoldenMaster()` reports errors (unbalanced `ifdef`/`endif`, help blocks without `ifdef`, `ifdef::arc42help[]` without `:arc42help:` being set, missing images, incomplete `version.properties`, a `revdate-iso` that is not `YYYY-MM`) and warnings (chapter set or help-block count differs from EN, no `revdate-iso`); errors fail `createFromGoldenMaster()` unless `failOnLintErrors` is false; in GitHub Actions (`GITHUB_ACTIONS=true`) every problem is also printed as annotation (`githubAnnotation()`) and a Markdown report (`lintReport()`) is appended to `GITHUB_STEP_SUMMARY`
-- **Feature Flag Removal**: Uses regex patterns to strip `[role="arc42help"]` blocks and `ifdef::arc42help` statements
+- **Golden Master Validation**: `validateGoldenMaster()` reports errors (unbalanced `ifdef`/`endif`, help blocks without or outside their `ifdef`, a sidebar (`****`) that is never closed, `ifdef::arc42help[]` without `:arc42help:` being set, missing images, incomplete `version.properties`, a `revdate-iso` that is not `YYYY-MM`) and warnings (chapter set or help-block count differs from EN, a chapter file that no document includes, an image that no document references, no `revdate-iso`); `////` comment blocks are skipped; errors fail `createFromGoldenMaster()` unless `failOnLintErrors` is false; in GitHub Actions (`GITHUB_ACTIONS=true`) every problem is also printed as annotation (`githubAnnotation()`) and a Markdown report (`lintReport()`) is appended to `GITHUB_STEP_SUMMARY`
+- **Feature Flag Removal**: `removeFeatures()` drops everything between `ifdef::arc42help[]` and its `endif::arc42help[]` (the two directive lines stay as empty lines), as Asciidoctor does for an unset attribute; a `[role="arc42help"]` block outside a conditional is removed by regex
 - **Template Generation**: Creates one template variant per language and style (15 languages × 2 styles = 30 for arc42)
 
 #### `lib/Discovery.groovy`
@@ -91,7 +94,7 @@ Main orchestration script that ties everything together. Supports CLI arguments 
 - **Supported Formats**: html, pdf, asciidoc, docbook, markdown, docx, epub, latex, and more
 
 #### `lib/Packager.groovy`
-- **ZIP Creation**: Packages templates + images into distribution archives
+- **ZIP Creation**: Packages templates + images into distribution archives; a ZIP that cannot be written is deleted and fails the build (`createAllDistributions()` returns the `failed` count), a combination without converted output is skipped
 - **Manifest comparison**: `diffManifests()` (script `compare-manifests.groovy`, `make manifest-diff`) lists the ZIPs whose SHA-256 differs between two builds
 - **Parallel Execution**: Creates all ZIPs concurrently
 - **Output**: `build/dist/*.zip` and `manifest.json`, published as GitHub Release by `make release`
@@ -147,6 +150,7 @@ make test-config        # building a non-arc42 project from its own config file
 make test-lint          # golden master validation on a fixture, ZH-TW discovery, GitHub annotations and report
 make test-manifest      # manifest.json: languages, styles, formats, sha256 of every ZIP, reproducibility, release notes, template commit
 make test-downloads     # download check: missing files, redirects, checksums (local HTTP server)
+make test-cli           # build.groovy rejects unknown phases, options and formats
 make test-outputcheck   # output checks (make validate): a small full build passes, damaged output is reported
 ```
 

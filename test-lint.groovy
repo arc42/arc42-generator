@@ -172,7 +172,9 @@ image::sub/dir/other.png[]
     def deChapterTwo = new File(fixture, 'DE/adoc/02_chapter.adoc')
     deChapterTwo.write(deChapterTwo.getText('utf-8').replace(helpBlock('HELP TWO B'), ''), 'utf-8')
     problems = templates.validateGoldenMaster()
-    assert problems.size() == 2 && problems.every { it.severity == 'warning' && it.language == 'DE' }, "two DE warnings expected, got: ${problems}"
+    assert problems.size() == 3 && problems.every { it.severity == 'warning' && it.language == 'DE' }, "three DE warnings expected, got: ${problems}"
+    def orphan = problems.find { it.file == 'DE/adoc/03_extra.adoc' }
+    assert orphan?.message?.contains('no document includes'), "a chapter file that is not included should be reported: ${problems}"
     def files = problems.find { it.file == 'DE/adoc' }
     assert files?.message?.contains('03_extra.adoc'), "the extra chapter should be named: ${files}"
     def blocks = problems.find { it.file == 'DE/adoc/02_chapter.adoc' }
@@ -286,12 +288,67 @@ image::sub/dir/other.png[]
         '::warning file=EN/version.properties,title=Golden master validation::100%25 done%0Anext'
 
     def report = templates.lintReport(problems, ['DE', 'EN'])
-    assert report.contains('2 error(s), 1 warning(s)'), report
-    assert report.contains('| DE | 1 | 1 |') && report.contains('| EN | 1 | 0 |'), "per-language counts expected:\n${report}"
+    assert report.contains('2 error(s), 2 warning(s)'), report
+    assert report.contains('| DE | 1 | 2 |') && report.contains('| EN | 1 | 0 |'), "per-language counts expected:\n${report}"
     assert report.contains("| ❌ error | `EN/adoc/01_chapter.adoc:15` | image 'missing,one.png' not found in EN/images/ |"), report
     assert templates.lintReport([], ['DE', 'EN']).contains('No problems found'), "a clean report should say so"
     println report
     println "✓ Test 11 passed\n"
+
+    println "=== Test 12: A help block next to its conditional instead of inside it is an error ==="
+    resetFixture()
+    // same number of role markers and ifdefs, but the block follows the (empty) conditional
+    chapterOne = new File(fixture, 'EN/adoc/01_chapter.adoc')
+    chapterOne.write(chapterOne.getText('utf-8').replace(helpBlock('HELP ONE'),
+        'ifdef::demohelp[]\nendif::demohelp[]\n[role="demohelp"]\n****\nHELP ONE\n****\n'), 'utf-8')
+    problems = templates.validateGoldenMaster()
+    assert problems.size() == 1, "expected exactly one problem, got: ${problems}"
+    assert problems[0].severity == 'error' && problems[0].line == 7, "the role marker in line 7 should be reported: ${problems[0]}"
+    assert problems[0].message.contains('not between ifdef::demohelp[]'), "unexpected message: ${problems[0].message}"
+    println "  reported: ${templates.formatProblem(problems[0])}"
+    println "✓ Test 12 passed\n"
+
+    println "=== Test 13: A sidebar that is never closed is an error ==="
+    resetFixture()
+    chapterOne.write(chapterOne.getText('utf-8').replace('HELP ONE\n****\n', 'HELP ONE\n'), 'utf-8')
+    problems = templates.validateGoldenMaster()
+    assert problems.size() == 1 && problems[0].severity == 'error', "expected exactly one error, got: ${problems}"
+    assert problems[0].file == 'EN/adoc/01_chapter.adoc' && problems[0].line == 7, "the open delimiter in line 7 should be reported: ${problems[0]}"
+    assert problems[0].message.contains('****'), "unexpected message: ${problems[0].message}"
+    println "  reported: ${templates.formatProblem(problems[0])}"
+    println "✓ Test 13 passed\n"
+
+    println "=== Test 14: Comment blocks are not checked ==="
+    resetFixture()
+    chapterOne.append('''
+////
+image::not-there.png[]
+ifdef::demohelp[]
+[role="demohelp"]
+****
+////
+''', 'utf-8')
+    problems = templates.validateGoldenMaster()
+    assert problems.isEmpty(), "nothing inside a //// block may be reported, got: ${problems}"
+    println "✓ Test 14 passed\n"
+
+    println "=== Test 15: An image that no document references is a warning; the logo is always used ==="
+    resetFixture()
+    new File(fixture, 'DE/images/unused.png').bytes = [7] as byte[]
+    def deMain = new File(fixture, 'DE/demo-template.adoc')
+    deMain.write(deMain.getText('utf-8').replace('image:demo-logo.png[demo] ', ''), 'utf-8')
+    problems = templates.validateGoldenMaster()
+    assert problems.size() == 1, "only unused.png should be reported, not the logo: ${problems}"
+    assert problems[0].severity == 'warning' && problems[0].file == 'DE/images/unused.png', "unexpected problem: ${problems[0]}"
+    println "  reported: ${templates.formatProblem(problems[0])}"
+    // the PNG next to a referenced SVG is its fallback for DOCX and LaTeX; an SVG next to a referenced PNG is not used
+    new File(fixture, 'DE/images/vector.svg').write('<svg xmlns="http://www.w3.org/2000/svg"/>', 'utf-8')
+    new File(fixture, 'DE/images/vector.png').bytes = [8] as byte[]
+    new File(fixture, 'DE/images/example.svg').write('<svg xmlns="http://www.w3.org/2000/svg"/>', 'utf-8')
+    new File(fixture, 'DE/adoc/02_chapter.adoc').append('\nimage::vector.svg[]\n', 'utf-8')
+    problems = templates.validateGoldenMaster()
+    assert problems*.file.sort() == ['DE/images/example.svg', 'DE/images/unused.png'], "vector.png is a fallback, example.svg is unused: ${problems}"
+    println "✓ Test 15 passed\n"
 
     println "=== All Tests Passed! ==="
     System.exit(0)

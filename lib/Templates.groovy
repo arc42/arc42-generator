@@ -90,24 +90,72 @@ class Templates {
 
         return result
     }
+
+    /**
+     * Remove the features a template style does not want. For every feature:
+     * - everything between ifdef::<prefix><feature>[] and its endif::<prefix><feature>[] is dropped,
+     *   as Asciidoctor does when the attribute is not set; the two directive lines stay as empty
+     *   lines, so that the text before and after the block stays separated
+     * - a [role="<prefix><feature>"] sidebar outside such a conditional (a lint error) is removed as well
+     *
+     * @param template AsciiDoc source
+     * @param featuresToRemove feature names without prefix, e.g. ['help', 'example']
+     */
     String removeFeatures(String template, List<String> featuresToRemove) {
         def result = template
         def prefix = config.project.featurePrefix
 
-        // Remove role-based feature blocks: [role="<prefix><feature>"] **** ... ****
         featuresToRemove.each { feature ->
-            def marker = Pattern.quote("${prefix}${feature}")
+            def name = "${prefix}${feature}".toString()
+            result = removeConditionalBlocks(result, name)
+            def marker = Pattern.quote(name)
             result = result.replaceAll(/(?ms)\[role="${marker}"\][ \r\n]+[*]{4}.*?[*]{4}/, '')
         }
 
-        // Remove ifdef/endif blocks for help feature
-        if ('help' in featuresToRemove) {
-            def helpMarker = Pattern.quote("${prefix}help")
-            result = result.replaceAll(/(?ms)ifdef::${helpMarker}\[\]/, '')
-            result = result.replaceAll(/(?ms)endif::${helpMarker}\[\]/, '')
-        }
-
         return result
+    }
+
+    /**
+     * Drop the lines between ifdef::<attribute>[] and the matching endif::<attribute>[] (nested
+     * conditionals of the same attribute are counted). A conditional that is never closed (a lint
+     * error) loses only its directive line, the text after it is kept.
+     */
+    private String removeConditionalBlocks(String text, String attribute) {
+        def open = "ifdef::${attribute}[]".toString()
+        def close = "endif::${attribute}[]".toString()
+        def lines = text.split('\n', -1) as List<String>
+        // an emptied directive line keeps its carriage return, so that CRLF files stay CRLF files
+        def emptied = { String line -> line.endsWith('\r') ? '\r' : '' }
+
+        def kept = []
+        int index = 0
+        while (index < lines.size()) {
+            def trimmed = lines[index].trim()
+            if (trimmed == open) {
+                int depth = 1
+                int end = -1
+                for (int i = index + 1; i < lines.size(); i++) {
+                    def candidate = lines[i].trim()
+                    if (candidate == open) {
+                        depth++
+                    } else if (candidate == close && --depth == 0) {
+                        end = i
+                        break
+                    }
+                }
+                kept << emptied(lines[index])
+                if (end > index) {
+                    kept << emptied(lines[end])
+                    index = end
+                }
+            } else if (trimmed == close) {
+                kept << emptied(lines[index])
+            } else {
+                kept << lines[index]
+            }
+            index++
+        }
+        return kept.join('\n')
     }
 
     /**
@@ -171,6 +219,8 @@ class Templates {
      *            lines in a file differ (unbalanced conditional)
      * - error:   the numbers of [role="<prefix><feature>"] and ifdef::<prefix><feature>[]
      *            lines in a file differ (a feature block that is not wrapped in its conditional)
+     * - error:   a [role="<prefix><feature>"] line that is not between an ifdef and its endif
+     * - error:   an odd number of sidebar delimiters (****) in a file: a block that is never closed
      * - error:   an image::target[] or image:target[] whose target is not in <LANG>/images/
      * - error:   a language uses ifdef::<prefix><feature>[] for a feature that a style keeps,
      *            but none of its documents sets the attribute :<prefix><feature>: (the style
@@ -180,6 +230,12 @@ class Templates {
      * - warning: version.properties has no revdate-iso (the download page then shows the localised revdate)
      * - warning: the chapter files (adoc/*.adoc) differ from those of the EN language
      * - warning: a chapter has a different number of feature blocks than its EN counterpart
+     * - warning: a chapter file (adoc/*.adoc) that no document of the language includes: it is in no
+     *            single-file or multi-page output, only in the AsciiDoc ZIP
+     * - warning: a file in <LANG>/images/ that no document references (it is shipped in every ZIP
+     *            with an images folder)
+     *
+     * Lines inside //// comment blocks are not rendered and therefore not checked.
      *
      * @param languages Language codes to check; auto-discovered when null
      * @return One map per problem: severity ('error' or 'warning'), language,
@@ -213,6 +269,8 @@ class Templates {
             }
 
             problems.addAll(lintFeatureAttributes(scans, language))
+
+            problems.addAll(lintUnusedFiles(scans, chapters.keySet(), language, imagesDir))
 
             problems.addAll(lintVersionProperties(languageDir, language))
 
@@ -312,7 +370,8 @@ class Templates {
 
     /**
      * One pass over an AsciiDoc file: the line numbers of the ifdef, endif and role
-     * marker lines per feature, and the image targets with their lines.
+     * marker lines per feature, the image targets with their lines, the include targets and
+     * the lines of the sidebar delimiters. //// comment blocks are skipped.
      */
     private Map scanDocument(File file) {
         def prefix = config.project.featurePrefix
@@ -328,16 +387,32 @@ class Templates {
         }
 
         def images = []
+        def includes = []       // targets of include::target[] lines
+        def sidebars = []       // lines of the sidebar delimiters (****)
+        def inComment = false   // inside a //// comment block
         def lines = file.readLines('utf-8')
         lines.eachWithIndex { line, index ->
             def trimmed = line.trim()
+            if (trimmed ==~ /\/{4,}/) {
+                inComment = !inComment
+                return
+            }
+            if (inComment) {
+                return   // comment blocks are not rendered
+            }
             def marker = markerLines[trimmed]
             def defined = definitions.find { pattern, feature -> pattern.matcher(trimmed).matches() }
             if (marker) {
                 markers[marker[0]][marker[1]] << index + 1
             } else if (defined) {
                 markers[defined.value].define << index + 1
+            } else if (trimmed == '****') {
+                sidebars << index + 1
             } else if (!trimmed.startsWith('//')) {   // comment lines are not rendered
+                def include = (trimmed =~ /^include::([^\[]+)\[/)
+                if (include.find()) {
+                    includes << include.group(1)
+                }
                 def matcher = IMAGE_MACRO.matcher(line)
                 while (matcher.find()) {
                     images << [line: index + 1, target: matcher.group(1)]
@@ -345,7 +420,7 @@ class Templates {
             }
         }
 
-        return [lineCount: lines.size(), markers: markers, images: images]
+        return [lineCount: lines.size(), markers: markers, images: images, includes: includes, sidebars: sidebars]
     }
 
     /** Scan every <LANG>/adoc/*.adoc file, keyed by file name and sorted */
@@ -377,7 +452,18 @@ class Templates {
                 error(found.role ? found.role[0] : found.ifdef[0],
                     "${found.role.size()} × [role=\"${name}\"] but ${found.ifdef.size()} × ifdef::${name}[] " +
                     "(every [role=\"${name}\"] block needs its own ifdef::${name}[] ... endif::${name}[])")
+            } else if (found.ifdef.size() == found.endif.size()) {
+                // the counts match: every role marker must also sit between an ifdef and its endif,
+                // otherwise the block is not removed with its conditional
+                def ranges = [found.ifdef.sort(false), found.endif.sort(false)].transpose()
+                found.role.findAll { line -> !ranges.any { line > it[0] && line < it[1] } }.each { line ->
+                    error(line, "[role=\"${name}\"] is not between ifdef::${name}[] and endif::${name}[]")
+                }
             }
+        }
+
+        if (scan.sidebars.size() % 2 != 0) {
+            error(scan.sidebars.last(), "${scan.sidebars.size()} sidebar delimiter(s) (****): a block is never closed")
         }
 
         scan.images.unique().each { image ->
@@ -410,6 +496,41 @@ class Templates {
                     problems << [severity: 'error', language: language, file: language, line: null, feature: feature,
                         message: "ifdef::${prefix}${feature}[] is used, but no document sets :${prefix}${feature}: " +
                             "(e.g. in adoc/config.adoc); the ${styles.join(', ')} style(s) would lose every ${feature} block"]
+                }
+            }
+        }
+        return problems
+    }
+
+    /**
+     * Files of a language that nothing uses: chapter files that no document includes (they are in no
+     * rendered output) and images that no document references (they are shipped in every ZIP with an
+     * images folder). The logo is always used: it is the one image of the plain style.
+     */
+    private List<Map> lintUnusedFiles(List<Map> scans, Collection<String> chapterNames, String language, File imagesDir) {
+        def problems = []
+        def warning = { String path, String message ->
+            problems << [severity: 'warning', language: language, file: path, line: null, message: message]
+        }
+
+        def included = scans.collectMany { it.includes }.collect { it.tokenize('/').last() } as Set
+        (chapterNames - included).each { name ->
+            warning("${language}/adoc/${name}".toString(),
+                "no document includes this chapter file: it is in none of the rendered outputs")
+        }
+
+        def targets = scans.collectMany { it.images*.target }
+        // an attribute reference could name any image: nothing can be said then
+        if (!targets.any { it.contains('{') }) {
+            def referenced = targets.collect { it.tokenize('/').last() } as Set
+            // a PNG next to a referenced SVG is its fallback for DOCX and LaTeX, so it is used as well
+            def isFallback = { String name ->
+                name.toLowerCase().endsWith('.png') && (name[0..-5] + '.svg') in referenced
+            }
+            imagesDir.listFiles()?.findAll { it.isFile() && !it.name.startsWith('.') }?.sort { it.name }?.each { image ->
+                if (image.name != config.project.logo && !(image.name in referenced) && !isFallback(image.name)) {
+                    warning("${language}/images/${image.name}".toString(),
+                        "no document references this image, yet it is shipped in every ZIP with an images folder")
                 }
             }
         }

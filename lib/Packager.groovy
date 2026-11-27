@@ -46,7 +46,9 @@ class Packager {
      *
      * @param sourceDir Directory to ZIP
      * @param zipFile Target ZIP file
-     * @return true if successful
+     * @return true if the ZIP was written, false if the source directory does not exist
+     * @throws IOException if the ZIP could not be written; a partial file is deleted, so that
+     *         no broken ZIP is left next to the good ones
      */
     boolean createZip(File sourceDir, File zipFile) {
         if (!sourceDir.exists() || !sourceDir.isDirectory()) {
@@ -55,27 +57,26 @@ class Packager {
 
         zipFile.parentFile.mkdirs()
 
-        def zos = new ZipOutputStream(new FileOutputStream(zipFile))
         try {
-            // sorted entries and a fixed timestamp make the ZIP reproducible
-            def files = []
-            sourceDir.eachFileRecurse { file -> if (file.isFile()) files << file }
-            files.sort { it.absolutePath }.each { file ->
-                def relativePath = file.absolutePath - sourceDir.absolutePath - File.separator
-                def entry = new ZipEntry(relativePath.replace(File.separator, '/'))
-                if (sourceDateEpoch != null) {
-                    entry.time = sourceDateEpoch * 1000L
+            new ZipOutputStream(new FileOutputStream(zipFile)).withCloseable { zos ->
+                // sorted entries and a fixed timestamp make the ZIP reproducible
+                def files = []
+                sourceDir.eachFileRecurse { file -> if (file.isFile()) files << file }
+                files.sort { it.absolutePath }.each { file ->
+                    def relativePath = file.absolutePath - sourceDir.absolutePath - File.separator
+                    def entry = new ZipEntry(relativePath.replace(File.separator, '/'))
+                    if (sourceDateEpoch != null) {
+                        entry.time = sourceDateEpoch * 1000L
+                    }
+                    zos.putNextEntry(entry)
+                    file.withInputStream { zos << it }
+                    zos.closeEntry()
                 }
-                zos.putNextEntry(entry)
-                file.withInputStream { zos << it }
-                zos.closeEntry()
             }
             return true
         } catch (Exception e) {
-            println "Error creating ZIP ${zipFile.name}: ${e.message}"
-            return false
-        } finally {
-            zos.close()
+            zipFile.delete()
+            throw new IOException("could not write ${zipFile.name}: ${e.message}", e)
         }
     }
 
@@ -86,7 +87,8 @@ class Packager {
      * @param style Template style (e.g., 'plain', 'with-help')
      * @param format Output format (e.g., 'html', 'markdown')
      * @param buildDir Base build directory (default: 'build')
-     * @return Path to created ZIP file or null if failed
+     * @return Path to created ZIP file, or null if there is no converted output for this combination
+     * @throws IOException if the ZIP could not be written
      */
     String createDistribution(String language, String style, String format, String buildDir = 'build') {
         // Source: build/{LANG}/{FORMAT}/{STYLE}/
@@ -118,8 +120,10 @@ class Packager {
      * @param templates List of template metadata from Discovery
      * @param formats List of format names (defaults to all configured formats)
      * @param parallel Enable parallel execution (default: true)
+     * @return [total, created, skipped, failed]: skipped combinations have no converted output,
+     *         failed ones could not be written (their partial ZIP is deleted); the caller fails the build on them
      */
-    void createAllDistributions(List<Map> templates, List<String> formats = null, boolean parallel = true) {
+    Map createAllDistributions(List<Map> templates, List<String> formats = null, boolean parallel = true) {
         if (!formats) {
             formats = config.formats.keySet() as List
         }
@@ -146,48 +150,43 @@ class Packager {
             }
         }
 
-        if (parallel) {
-            // Use GPars for parallel execution
-            GParsPool.withPool(Runtime.runtime.availableProcessors()) {
-                combinations.eachParallel { combo ->
-                    def template = combo.template
-                    def format = combo.format
-                    def result = createDistribution(template.language, template.style, format)
+        def lock = new Object()
+        def packageOne = { combo ->
+            def template = combo.template
+            def format = combo.format
+            def name = "${template.language}/${template.style}/${format}"
+            def result = null
+            def error = null
+            try {
+                result = createDistribution(template.language, template.style, format)
+            } catch (Exception e) {
+                error = e.message
+            }
 
-                    synchronized(this) {
-                        if (result) {
-                            created++
-                            packaged << [template: template, format: format, zip: new File(result)]
-                            def zipFile = new File(result)
-                            def sizeKB = String.format('%.1f', zipFile.length() / 1024.0)
-                            println "[${created + skipped}/${totalZips}] ✓ ${template.language}/${template.style}/${format} (${sizeKB} KB)"
-                        } else {
-                            skipped++
-                            println "[${created + skipped}/${totalZips}] ⊘ ${template.language}/${template.style}/${format} (not found)"
-                        }
-                    }
+            synchronized (lock) {
+                if (error) {
+                    failed++
+                    println "[${created + skipped + failed}/${totalZips}] ✗ ${name}: ${error}"
+                } else if (result) {
+                    created++
+                    def zipFile = new File(result)
+                    packaged << [template: template, format: format, zip: zipFile]
+                    def sizeKB = String.format('%.1f', zipFile.length() / 1024.0)
+                    println "[${created + skipped + failed}/${totalZips}] ✓ ${name} (${sizeKB} KB)"
+                } else {
+                    skipped++
+                    println "[${created + skipped + failed}/${totalZips}] ⊘ ${name} (not found)"
                 }
             }
         }
 
-        if (!parallel) {
-            // Sequential execution
-            combinations.each { combo ->
-                def template = combo.template
-                def format = combo.format
-                def result = createDistribution(template.language, template.style, format)
-
-                if (result) {
-                    created++
-                    packaged << [template: template, format: format, zip: new File(result)]
-                    def zipFile = new File(result)
-                    def sizeKB = String.format('%.1f', zipFile.length() / 1024.0)
-                    println "[${created + skipped}/${totalZips}] ✓ ${template.language}/${template.style}/${format} (${sizeKB} KB)"
-                } else {
-                    skipped++
-                    println "[${created + skipped}/${totalZips}] ⊘ ${template.language}/${template.style}/${format} (not found)"
-                }
+        if (parallel) {
+            // Use GPars for parallel execution
+            GParsPool.withPool(Runtime.runtime.availableProcessors()) {
+                combinations.eachParallel(packageOne)
             }
+        } else {
+            combinations.each(packageOne)
         }
 
         def endTime = System.currentTimeMillis()
@@ -211,6 +210,8 @@ class Packager {
                 println "Release notes and file list: ${notes.parentFile.path}"
             }
         }
+
+        return [total: totalZips, created: created, skipped: skipped, failed: failed]
     }
 
     /**
