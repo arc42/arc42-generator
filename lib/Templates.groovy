@@ -133,14 +133,17 @@ class Templates {
         def imageFiles = imagesSource.listFiles()?.findAll { it.isFile() }
 
         if (templateName == 'plain') {
-            // Only copy the logo
+            // Only copy the logo, in all its formats (arc42-logo.png and arc42-logo.svg):
+            // the template may use the SVG, with the PNG as fallback for DOCX and LaTeX
             String logo = config.project.logo
-            def logoSource = imageFiles?.find { it.name == logo }
+            def logoBase = logo.contains('.') ? logo.substring(0, logo.lastIndexOf('.')) : logo
+            def logoSources = imageFiles?.findAll { it.name == logo || it.name.startsWith(logoBase + '.') } ?: []
 
-            if (logoSource) {
-                def logoTarget = new File(imagesTarget, logo)
-                logoTarget.bytes = logoSource.bytes
-                println "  ✓ Copied ${logo}"
+            if (logoSources) {
+                logoSources.each { source ->
+                    new File(imagesTarget, source.name).bytes = source.bytes
+                    println "  ✓ Copied ${source.name}"
+                }
             } else {
                 println "  ⚠ Warning: ${logo} not found"
             }

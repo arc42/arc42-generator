@@ -78,6 +78,7 @@ Main orchestration script that ties everything together. Supports CLI arguments 
 #### `lib/Converter.groovy`
 - **AsciidoctorJ Integration**: Direct HTML, PDF and DocBook conversion
 - **PDF**: AsciidoctorJ PDF with `lib/pdf-theme.yml` (default theme plus the fallback fonts full Noto Serif, for Latin letters such as the Azerbaijani Ə that the bundled Noto Serif subset lacks, and Droid Sans Fallback for Chinese, installed in the Docker image under `/usr/share/fonts/noto` and `/usr/share/fonts/droid-nonlatin`); images are embedded, so the PDF ZIP holds a single file
+- **SVG fallback**: DOCX and LaTeX get a copy of the DocBook file in which every `fileref="….svg"` points to the PNG of the same name, if that PNG exists (`writeWithRasterImages()`); the copy is deleted after Pandoc, so the docbook download keeps the SVGs. The plain style copies `project.logo` with all files of its base name, so `arc42-logo.svg` comes with its PNG fallback
 - **Pandoc Integration**: Two-step conversion (AsciiDoc → DocBook → target format)
 - **Multi-page formats**: one DocBook and one output file per chapter; the feature attributes of the style (e.g. `arc42help` for with-help) are set for the per-chapter conversion
 - **Diagnostics**: Asciidoctor log records and Pandoc's stderr are collected in `diagnostics`, printed after `convertAll()` (deduplicated) and evaluated by `build.groovy` against `--failure-level`

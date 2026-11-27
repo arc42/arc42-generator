@@ -200,6 +200,35 @@ try {
     }
     println "✓ Test 15 passed\n"
 
+    println "=== Test 16: DOCX and LaTeX use the PNG of an SVG, the other formats keep the SVG ==="
+    def svgDir = new File('build2/test/svg/src')
+    def svgImages = new File(svgDir, 'images')
+    svgImages.mkdirs()
+    def svgText = '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="10"><rect width="20" height="10" fill="#005CA9"/></svg>'
+    new File(svgImages, 'logo.svg').write(svgText, 'utf-8')
+    new File(svgImages, 'only.svg').write(svgText, 'utf-8')    // no PNG of the same name: stays SVG
+    javax.imageio.ImageIO.write(new java.awt.image.BufferedImage(20, 10, java.awt.image.BufferedImage.TYPE_INT_RGB), 'png', new File(svgImages, 'logo.png'))
+    new File(svgDir, 'svg.adoc').write("= SVG\n\nimage::logo.svg[logo]\n\nimage::only.svg[only]\n", 'utf-8')
+    def svgTemplate = [language: 'XX', style: 'with-help', srcDir: svgDir.absolutePath,
+                       mainFile: new File(svgDir, 'svg.adoc').absolutePath,
+                       hasImages: true, imagesDir: svgImages.absolutePath, versionProperties: [:]]
+    def docbookXml = new File("build2/test/svg/docbook/with-help/${config.project.name}.xml")
+
+    def svgDocx = converter.convertViaPandoc(svgTemplate, 'docx', 'build2/test/svg/docx/with-help')
+    def media = new java.util.zip.ZipFile(svgDocx).withCloseable { zip -> zip.entries().collect { it.name }.findAll { it.startsWith('word/media/') } }
+    assert media.any { it.endsWith('.png') }, "DOCX should embed the PNG of logo.svg, got: ${media}"
+    assert media.count { it.endsWith('.svg') } == 1, "DOCX should embed only.svg (no PNG) as SVG, got: ${media}"
+    assert docbookXml.getText('utf-8').contains('fileref="images/logo.svg"'), "the DocBook file itself must keep the SVG"
+    assert !docbookXml.parentFile.listFiles().any { it.name.endsWith('-docx.xml') }, "the DocBook copy for DOCX must be removed"
+
+    def svgTex = new File(converter.convertViaPandoc(svgTemplate, 'latex', 'build2/test/svg/latex/with-help')).getText('utf-8')
+    assert svgTex.contains('images/logo.png') && !svgTex.contains('images/logo.svg'), "LaTeX should include the PNG of logo.svg"
+    assert svgTex.contains('images/only.svg'), "LaTeX should keep an SVG without PNG"
+
+    def svgMd = new File(converter.convertViaPandoc(svgTemplate, 'markdown', 'build2/test/svg/markdown/with-help')).getText('utf-8')
+    assert svgMd.contains('images/logo.svg') && !svgMd.contains('images/logo.png'), "Markdown should keep the SVG"
+    println "✓ Test 16 passed\n"
+
     println "=== All Tests Passed! ==="
     System.exit(0)
 
