@@ -130,3 +130,8 @@ COPY lib/ ./lib/
 
 # Default command: the full arc42 build
 CMD ["make", "build"]
+
+# Checksum of the files the image is built from, set by the Makefile (make image); its targets
+# rebuild the image when the label differs. Last, so a new value rebuilds only this layer.
+ARG IMAGE_INPUTS=
+LABEL org.arc42.image-inputs=$IMAGE_INPUTS

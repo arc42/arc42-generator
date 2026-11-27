@@ -66,11 +66,29 @@ OUTPUT_DIRS := /workspace/build /workspace/build2
 BUILD_DIR := build
 endif
 
+# The image is built from these files (the repository itself is mounted). make image stores their
+# checksum in the image as label; RUN rebuilds an image that is missing or carries another checksum,
+# since its tag never changes and docker compose run would otherwise keep using the old image.
+IMAGE_INPUTS := Dockerfile init-groovy-deps.groovy
+IMAGE_LABEL := org.arc42.image-inputs
+IMAGE_SUM = $$(cat $(IMAGE_INPUTS) | cksum | awk '{print $$1 "-" $$2}')
+# name of the image (docker-compose.yml): asked on first use, then remembered
+IMAGE_NAME = $(eval IMAGE_NAME := $(shell $(COMPOSE) config --images $(SERVICE) 2>/dev/null))$(IMAGE_NAME)
+BUILD_IMAGE = $(COMPOSE) build --build-arg IMAGE_INPUTS=$(IMAGE_SUM)
+# prints nothing on stdout unless the build failed; the build output goes to stderr
+IMAGE_CHECK = sum=$(IMAGE_SUM); \
+  if [ "$$(docker image inspect -f '{{index .Config.Labels "$(IMAGE_LABEL)"}}' $(IMAGE_NAME) 2>/dev/null)" != "$$sum" ]; then \
+    echo "→ Docker image $(IMAGE_NAME) is missing or was built from another $(IMAGE_INPUTS): building it" >&2; \
+    $(COMPOSE) build --build-arg IMAGE_INPUTS=$$sum >&2 || echo failed; \
+  fi
+# checks the image once per make run (expands to nothing); stops make if the image cannot be built
+ENSURE_IMAGE = $(eval ENSURE_IMAGE :=)$(if $(shell $(IMAGE_CHECK)),$(error ✗ Could not build the Docker image $(IMAGE_NAME)))
+
 # RUN prefixes every command that needs the tools of the image (Java, Groovy, Pandoc, cmark, git)
 ifdef ARC42_IN_CONTAINER
 RUN :=
 else
-RUN := $(COMPOSE) run --rm $(MOUNT) $(DOCKER_RUN_OPTS) $(SERVICE)
+RUN = $(ENSURE_IMAGE)$(COMPOSE) run --rm $(MOUNT) $(DOCKER_RUN_OPTS) $(SERVICE)
 endif
 HOST_UID := $(shell id -u)
 HOST_GID := $(shell id -g)
@@ -114,11 +132,11 @@ help: ## Show this help
 
 ##@ Docker image
 
-image: ## Build the Docker image (Java, Groovy, Pandoc, cmark); rerun after changing the Dockerfile
-	$(COMPOSE) build
+image: ## Build the Docker image (Java, Groovy, Pandoc, cmark); other targets do it when Dockerfile or init-groovy-deps.groovy changed
+	$(BUILD_IMAGE)
 
 image-fresh: ## Rebuild the Docker image from scratch (no cache)
-	$(COMPOSE) build --no-cache
+	$(BUILD_IMAGE) --no-cache
 
 versions: ## Show the tool versions inside the image
 	$(RUN) sh -c 'java -version 2>&1 | head -n 1; groovy --version; pandoc --version | head -n 1; \
