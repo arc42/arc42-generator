@@ -41,7 +41,8 @@ formats = [
     'gitHubMarkdown': [imageFolder: true, label: 'GitHub Markdown'],
     'gitHubMarkdownMP': [imageFolder: true, label: 'GitHub Markdown · MP'],
     'textile': [imageFolder: true, label: 'Textile'],
-    'docx': [imageFolder: true, label: 'Word (.docx)'],
+    // the images are embedded in the .docx file, as in EPUB and PDF
+    'docx': [imageFolder: false, label: 'Word (.docx)'],
     'docbook': [imageFolder: true, label: 'DocBook'],
     'latex': [imageFolder: true, label: 'LaTeX'],
     'pdf': [imageFolder: false, label: 'PDF'],
