@@ -68,7 +68,7 @@ Every run starts from a clean `build/` output, so nothing from an earlier run en
 | `make pin` | Record the checked-out arc42-template commit in this repository (a git commit on the current branch)
 
 2+| *Release*
-| `make release` | Full build, then publish the ZIPs and `manifest.json` as GitHub Release `<TAG>` of arc42-template (default: today, `YYYY.MM.DD`). Builds the newest template main; stops if its content differs from the recorded commit.
+| `make release` | Tests and full build, then publish the ZIPs and `manifest.json` as GitHub Release `<TAG>` of arc42-template (default: today, `YYYY.MM.DD`): uploaded as draft, downloaded again and compared with the build, then published. Builds the newest template main; stops if its content differs from the recorded commit.
 | `make release-tools TOOLS_TAG=tools-YYYY.MM` | Publish the hand-made tool files of arc42-template `other-formats/` (Enterprise Architect, Confluence, Rhapsody, Doxygen) as a GitHub Release that never becomes _latest_
 
 2+| *Docker image and tools*
@@ -121,6 +121,8 @@ make release-tools TOOLS_TAG=tools-2026.09            # the hand-made tool files
 ----
 
 `make release` builds everything with the release tag in `manifest.json` and publishes a GitHub Release `<TAG>` on arc42-template: every ZIP of the manifest and `manifest.json`, release notes with the version of every language, targeted at the template commit that was built. `https://github.com/arc42/arc42-template/releases/latest/download/<file>` then serves the newest file, and https://arc42.org/download links there (through `arc42.org/dl/<file>`). Nothing is committed to arc42-template. After a release on arc42/arc42-template, `make release` notifies arc42.org-site (`repository_dispatch` `template-released`), which then refreshes the language and format data of the download page.
+
+The release is first uploaded as a draft, which nobody can download. `make release` then downloads the draft again and compares every file with the build (SHA-256 of `manifest.json`); only if all files match does it publish the release. If the upload or the comparison fails, nothing is published and the draft stays; remove it with `gh release delete <TAG> -R arc42/arc42-template --yes` before the next attempt.
 
 If the files equal those of the latest release (names and SHA-256 in `manifest.json`), nothing is published. The release targets need the GitHub CLI `gh`, logged in, on your machine. `make release-tools` publishes the hand-made tool files from the `other-formats/` folders of arc42-template; they change rarely.
 

@@ -40,6 +40,8 @@ PREFIX ?=
 CHECKSUMS ?=
 # manifest-save, manifest-diff: the manifest.json of an earlier build that the current one is compared with
 BASE ?= baseline-manifest.json
+# SHA-256 on the host (release): sha256sum on Linux, shasum on macOS
+SHA256SUM := $(if $(shell command -v sha256sum 2>/dev/null),sha256sum,shasum -a 256)
 PRERELEASE_ON := $(filter 1 true yes,$(PRERELEASE))
 # a template release (tag YYYY.MM.DD[.n], not a pre-release) exists on REPO; tools releases do not count
 HAS_TEMPLATE_RELEASE = gh release list -R $(REPO) --exclude-pre-releases --exclude-drafts --limit 100 --json tagName -q '.[].tagName' | grep -qE '^[0-9]{4}\.[0-9]{2}\.[0-9]{2}(\.[0-9]+)?$$'
@@ -106,7 +108,8 @@ TEST_SCRIPTS := $(patsubst test-%.groovy,%,$(wildcard test-*.groovy))
         build generate templates convert distribution validate manifest-save manifest-diff \
         test check \
         template-checkout template-update pin release release-tools check-downloads \
-        clean fix-owner host-only _gh-check _validate-markdown _validate-images _validate-asciidoc _validate-content
+        clean fix-owner host-only _gh-check _validate-markdown _validate-images _validate-asciidoc _validate-content \
+        _verify-release-files
 
 ##@ Help
 
@@ -239,7 +242,8 @@ ifneq ($(TEMPLATE),)
 	$(error release is for arc42 only)
 endif
 	@if gh release view "$(TAG)" -R $(REPO) >/dev/null 2>&1 || gh api "repos/$(REPO)/git/ref/tags/$(TAG)" >/dev/null 2>&1; then \
-	  echo "✗ Tag $(TAG) exists on $(REPO). A second release on the same day: make release TAG=$(TAG).2" >&2; exit 1; \
+	  echo "✗ Tag or release $(TAG) exists on $(REPO). A second release on the same day: make release TAG=$(TAG).2" >&2; \
+	  echo "  An unfinished draft of a failed attempt is removed with: gh release delete $(TAG) -R $(REPO) --yes" >&2; exit 1; \
 	fi
 	@git -C $(SUBMODULE) fetch -q origin $(TEMPLATE_BRANCH)
 	@pinned=$$(git rev-parse HEAD:$(SUBMODULE)); \
@@ -251,6 +255,8 @@ endif
 	  echo "✗ The recorded $(SUBMODULE) commit is not the newest $(TEMPLATE_BRANCH): the ZIPs would not match the template." >&2; \
 	  echo "  Merge the pending pin update (Dependabot) first, or: make release UPDATE_TEMPLATE=1" >&2; exit 1; \
 	fi
+	@# a release is built by a generator whose tests pass
+	@$(MAKE) --no-print-directory test
 	@# the same template content as recorded (or UPDATE_TEMPLATE): build from $(TEMPLATE_BRANCH)
 	@$(MAKE) --no-print-directory build UPDATE_TEMPLATE=1 OPTS="$(strip $(OPTS) --release-tag=$(TAG))"
 	@# nothing to release: the files (names and SHA-256) equal the manifest of the latest release;
@@ -266,10 +272,18 @@ endif
 	if ! gh api "repos/$(REPO)/commits/$$commit" >/dev/null 2>&1; then \
 	  echo "✗ Template commit $$commit is not in $(REPO) (a fork that is behind? sync it first)" >&2; exit 1; \
 	fi; \
-	echo "==> Publishing release $(TAG) on $(REPO) ($$(wc -l < build/release/files.txt | tr -d ' ') files)"; \
-	gh release create "$(TAG)" -R $(REPO) --target "$$commit" --title "arc42 template $(TAG)" \
-	  --notes-file build/release/notes.md $(if $(PRERELEASE_ON),--prerelease,--latest) \
-	  $$(sed 's|^|$(DIST_DIR)/|' build/release/files.txt) && \
+	echo "==> Uploading release $(TAG) to $(REPO) as draft ($$(wc -l < build/release/files.txt | tr -d ' ') files)"; \
+	gh release create "$(TAG)" -R $(REPO) --draft --target "$$commit" --title "arc42 template $(TAG)" \
+	  --notes-file build/release/notes.md $(if $(PRERELEASE_ON),--prerelease) \
+	  $$(sed 's|^|$(DIST_DIR)/|' build/release/files.txt) || { \
+	  echo "✗ The upload failed; nothing is published. Remove the draft before the next attempt: gh release delete $(TAG) -R $(REPO) --yes" >&2; exit 1; }; \
+	echo "==> Downloading the draft again and comparing it with the build"; \
+	rm -rf build/release/download && mkdir -p build/release/download && \
+	gh release download "$(TAG)" -R $(REPO) --dir build/release/download && \
+	$(MAKE) --no-print-directory _verify-release-files DIR=build/release/download || { \
+	  echo "✗ The uploaded files are not those of the build; nothing is published. The draft is kept for inspection," >&2; \
+	  echo "  remove it with: gh release delete $(TAG) -R $(REPO) --yes" >&2; exit 1; }; \
+	gh release edit "$(TAG)" -R $(REPO) --draft=false $(if $(PRERELEASE_ON),,--latest) >/dev/null && \
 	echo "✓ Published https://github.com/$(REPO)/releases/tag/$(TAG)" || exit 1; \
 	if [ -z "$(PRERELEASE_ON)" ] && [ "$(REPO)" = "arc42/arc42-template" ]; then \
 	  if gh api repos/$(SITE_REPO)/dispatches -f event_type=template-released -f "client_payload[tag]=$(TAG)" >/dev/null 2>&1; then \
@@ -322,6 +336,20 @@ fix-owner: ## Linux only: give files created by the container (root) back to the
 _gh-check:
 	@command -v gh >/dev/null 2>&1 || { echo "✗ Releases need the GitHub CLI gh on this machine (it is not in the image): https://cli.github.com" >&2; exit 1; }
 	@gh auth status -h github.com >/dev/null 2>&1 || { echo "✗ gh is not logged in to github.com: gh auth login" >&2; exit 1; }
+
+# The files in DIR (downloaded from a release) are those of the build: manifest.json is identical,
+# and DIR holds exactly the ZIPs of the manifest, each with its SHA-256
+_verify-release-files:
+	@[ -n "$(DIR)" ] && [ -d "$(DIR)" ] || { echo "✗ _verify-release-files needs DIR=<directory with the downloaded files>" >&2; exit 2; }
+	@cmp -s "$(DIR)/manifest.json" $(DIST_DIR)/manifest.json || { echo "✗ $(DIR)/manifest.json differs from $(DIST_DIR)/manifest.json" >&2; exit 1; }
+	@expected=$$(awk -F'"' '/"name":/ {name = $$4} /"sha256":/ {print $$4 "  " name}' $(DIST_DIR)/manifest.json | sort -k2); \
+	actual=$$(cd "$(DIR)" && ls | grep -v '^manifest\.json$$' | while IFS= read -r f; do $(SHA256SUM) "$$f"; done | sed 's/ [ *]/  /' | sort -k2); \
+	if [ -n "$$expected" ] && [ "$$expected" = "$$actual" ]; then \
+	  echo "✓ $$(echo "$$expected" | wc -l | tr -d ' ') files in $(DIR) have the SHA-256 of the manifest"; \
+	else \
+	  echo "✗ The files in $(DIR) differ from the manifest (< manifest, > $(DIR)):" >&2; \
+	  diff <(echo "$$expected") <(echo "$$actual") | grep '^[<>]' | head -n 20 >&2; exit 1; \
+	fi
 
 host-only:
 	@if [ -n "$(ARC42_IN_CONTAINER)" ]; then \
