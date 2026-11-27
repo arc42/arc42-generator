@@ -475,6 +475,9 @@ class Converter {
      * config.adoc is where the golden master switches its features on (e.g. ':arc42help:'), so the
      * features of the template style have to be set as attributes here. Without them every
      * 'ifdef::arc42help[]' block is dropped and the with-help output equals the plain output.
+     *
+     * Only the chapters the main document includes are converted (chapterFiles): a file that merely
+     * lies in the directory is in no other format either.
      */
     void convertToDocBookMP(Map template, String docbookMPRelDir) {
         def outDir = new File(projectRoot, docbookMPRelDir).canonicalFile
@@ -482,13 +485,31 @@ class Converter {
         def attrs = createAttributes(template)
         featureAttributes(template).each { name -> attrs[name] = '' }
         def baseDir = new File(template.srcDir).canonicalFile
-        new File(template.srcDir).listFiles().sort { it.name }.each { f ->
-            if (!f.name.endsWith('.adoc') || f.name in [projectName + '.adoc', 'config.adoc']) return
+        chapterFiles(template).each { f ->
             def opts = Options.builder().toFile(new File(outDir, f.name.replace('.adoc', '.xml')))
                 .backend('docbook').safe(SafeMode.UNSAFE).baseDir(baseDir).mkDirs(true)
                 .attributes(attrs).build()
             asciidoctor.convertFile(f, opts)
         }
+    }
+
+    /**
+     * The chapter files of a template: the .adoc files of its source directory that the main document
+     * includes, sorted by name, without the settings file config.adoc. They make up the single-file
+     * formats, so the multi-page formats consist of the same files.
+     */
+    List<File> chapterFiles(Map template) {
+        def srcDir = new File(template.srcDir)
+        def names = new TreeSet<String>()
+        new File(template.mainFile).getText('utf-8').eachLine { line ->
+            def include = (line =~ /^include::([^\[]+)\[/)
+            if (include.find() && !include.group(1).contains('/')) {
+                names << include.group(1)
+            }
+        }
+        return names.findAll { it.endsWith('.adoc') && it != 'config.adoc' && it != projectName + '.adoc' }
+            .collect { new File(srcDir, it) }
+            .findAll { it.isFile() }
     }
 
     /**

@@ -38,7 +38,7 @@ make test       # all test scripts
 * validates the Golden Master (conditionals, help blocks, the `arc42help` attribute, images, version.properties) and stops on errors,
 * generates the templates in all languages and styles and converts them to 15 output formats (HTML, PDF, Markdown variants, DOCX, EPUB, LaTeX, reStructuredText, Textile, DocBook, AsciiDoc), stopping on Asciidoctor or Pandoc diagnostics,
 * creates the distribution ZIPs in `build/dist/`, together with a `manifest.json` that lists languages (with version and date), styles, formats and every ZIP with its size and SHA-256,
-* validates the output: the Markdown with `cmark` (warnings only), the images of the with-help styles and the includes of the AsciiDoc output (both fail the build).
+* validates the output and fails on any problem: the content of every format (no leftover AsciiDoc, same headings, help texts and images as the template, well-formed DocBook/DOCX/EPUB, readable PDFs), the ZIPs against `manifest.json`, the Markdown with `cmark`, and the includes of the AsciiDoc output.
 
 Every run starts from a clean `build/` output, so nothing from an earlier run ends up in the ZIPs. The output is reproducible: unchanged content produces byte-identical files and ZIPs (timestamps come from `SOURCE_DATE_EPOCH` or the last commit of the Golden Master outside `dist/`, not from the build time, so a merged release does not change them; every EPUB gets a fixed identifier derived from project, language and style instead of a random one).
 
@@ -54,11 +54,13 @@ Every run starts from a clean `build/` output, so nothing from an earlier run en
 | `make templates` | Phase 1: validate the Golden Master, generate the templates into `build/src_gen/`
 | `make convert` | Phases 2-3: discover and convert the templates
 | `make distribution` | Phase 4: create the distribution ZIPs
-| `make validate` | Validate the output: Markdown with `cmark` (warnings only), images of the with-help styles and AsciiDoc includes (fail)
+| `make validate` | Validate the output (fails on any problem): content of every format and the ZIPs, Markdown with `cmark`, images, AsciiDoc includes
+| `make manifest-save` | Keep `build/dist/manifest.json` as `baseline-manifest.json` (or `BASE=<file>`), to compare a later build with it
+| `make manifest-diff` | List the ZIPs of this build that differ (name, SHA-256) from those of the saved manifest; fails if any differ
 
 2+| *Tests*
 | `make test` | All test scripts
-| `make test-<name>` | One test script: `templates`, `discovery`, `converter`, `config`, `lint`
+| `make test-<name>` | One test script: `templates`, `discovery`, `converter`, `config`, `lint`, `manifest`, `downloads`, `outputcheck`
 
 2+| *Golden Master (arc42-template submodule)*
 | `make template-checkout` | Check out arc42-template at the recorded commit (local changes are kept; the target stops instead)
@@ -162,7 +164,16 @@ The build fails on problems in the sources, in the conversion and in the output:
 * **Golden Master lint** (before generation): unbalanced `ifdef::arc42help[]`/`endif::arc42help[]`, help blocks that are not wrapped in a conditional, a language that uses `ifdef::arc42help[]` but never sets `:arc42help:` (its with-help template would lose all help text), image references without a file in `<LANG>/images/`, incomplete `version.properties`, and a `revdate-iso` that is not a month `YYYY-MM` are errors; a chapter set or help-block count that differs from EN, and a `version.properties` without `revdate-iso` (the machine-readable month of `revdate`, written to `manifest.json` as `isoDate`), are warnings. Use `OPTS=--lint=warn` to report instead of fail.
 * **Diagnostics** (after conversion): Asciidoctor log records (e.g. a missing include) and Pandoc warnings (e.g. an image it could not embed into DOCX or EPUB) are printed with file and line. Records at `--failure-level` (default `warn`) or above fail the build.
 * **Clean output**: the output directories of a phase are deleted before the phase runs.
-* **Output validation** (`make validate`, part of `make build`): the Markdown is checked with `cmark` (warnings only); for the with-help styles the `images/` directories of markdown, asciidoc, textile, rst and html must exist and be non-empty, and every image reference in the with-help Markdown must resolve to a file. All image findings are printed, then the build fails.
+* **Output validation** (`make validate`, part of `make build`): every problem is printed, then the build fails. `lib/OutputCheck.groovy` checks every language, style and format:
+** no AsciiDoc directive or unresolved attribute is left in a rendered file, and every text file is valid UTF-8;
+** the numbers of chapter and section headings agree with the DocBook rendering, in HTML, all Markdown variants, reStructuredText, Textile, LaTeX and DOCX; the multi-page formats have one file per chapter the main document includes;
+** a style contains as many help blocks as the golden master (plain: none), and the with-help output of every format is larger than the plain one;
+** every image the template references is referenced by the output and shipped with it, or embedded (DOCX, EPUB, PDF);
+** DocBook and the XML parts of DOCX and EPUB are well-formed; every PDF has pages and extractable text;
+** `manifest.json` lists exactly one ZIP per language, style and format, and every ZIP has the size and SHA-256 of the manifest, can be read to its end and holds the files of its output directory.
++
+In addition all Markdown formats are read with `cmark`, the `images/` directories of the with-help styles must exist, and the includes of the AsciiDoc output must resolve.
+* **Comparing two builds** (`make manifest-save`, `make manifest-diff`): the output is reproducible, so two builds of the same arc42-template commit differ only in the ZIPs that a change of the generator really changed. Before changing the generator, run `make build && make manifest-save`; afterwards `make build && make manifest-diff` lists the ZIPs that differ. A refactoring must change none. The CI does the same for every pull request and lists the differing ZIPs in the job summary.
 
 === Docker Image Details
 
@@ -180,6 +191,7 @@ The container includes:
 * Groovy 5.0.3
 * Pandoc 3.7.0.2 (document converter, pinned release binary with checksum)
 * cmark (CommonMark validator)
+* poppler-utils (`pdfinfo`, `pdftotext`: the output check of the PDFs)
 * GNU make and git
 * AsciidoctorJ 2.5.10 (AsciiDoc processor, bundles Asciidoctor 2.0.20) and AsciidoctorJ PDF 2.3.27
 * Droid Sans Fallback (fallback font of the PDF output for Chinese)

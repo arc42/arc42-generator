@@ -325,6 +325,27 @@ class Packager {
         return notesFile
     }
 
+    /**
+     * Compare the files of two manifests by name and sha256. Builds are reproducible, so two builds of
+     * the same golden master commit differ only in the files a change of the generator really changed.
+     *
+     * @return [added: names only in current, removed: names only in base, changed: names whose sha256
+     *         differs, unchanged: number of identical files, sameTemplate: both manifests name the same
+     *         templateCommit (if not, every ZIP differs by its timestamps alone)]
+     */
+    static Map diffManifests(Map base, Map current) {
+        def baseFiles = base.files.collectEntries { [(it.name): it.sha256] }
+        def currentFiles = current.files.collectEntries { [(it.name): it.sha256] }
+        def common = baseFiles.keySet().intersect(currentFiles.keySet())
+        return [
+            added       : (currentFiles.keySet() - baseFiles.keySet()).sort(),
+            removed     : (baseFiles.keySet() - currentFiles.keySet()).sort(),
+            changed     : common.findAll { baseFiles[it] != currentFiles[it] }.sort(),
+            unchanged   : common.count { baseFiles[it] == currentFiles[it] },
+            sameTemplate: base.templateCommit == current.templateCommit,
+        ]
+    }
+
     /** Style as it appears in file names: 'with-help' becomes 'withhelp'. */
     static String styleShort(String style) {
         style.replaceAll("[^a-zA-Z]", "")

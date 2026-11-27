@@ -38,6 +38,8 @@ TOOLS_TAG ?=
 # check-downloads: where the files are served; CHECKSUMS=1 downloads them and compares the SHA-256
 PREFIX ?=
 CHECKSUMS ?=
+# manifest-save, manifest-diff: the manifest.json of an earlier build that the current one is compared with
+BASE ?= baseline-manifest.json
 PRERELEASE_ON := $(filter 1 true yes,$(PRERELEASE))
 # a template release (tag YYYY.MM.DD[.n], not a pre-release) exists on REPO; tools releases do not count
 HAS_TEMPLATE_RELEASE = gh release list -R $(REPO) --exclude-pre-releases --exclude-drafts --limit 100 --json tagName -q '.[].tagName' | grep -qE '^[0-9]{4}\.[0-9]{2}\.[0-9]{2}(\.[0-9]+)?$$'
@@ -96,13 +98,15 @@ FIX_OWNER = @$(MAKE) --no-print-directory fix-owner
 
 # with-help output of these formats must ship a non-empty images/ directory
 FORMATS_WITH_IMAGES := markdown asciidoc textile rst html
+MARKDOWN_FORMATS := markdown markdownStrict gitHubMarkdown markdownMP markdownMPStrict gitHubMarkdownMP
+CHECK_OPTS ?=
 TEST_SCRIPTS := $(patsubst test-%.groovy,%,$(wildcard test-*.groovy))
 
 .PHONY: help image image-fresh versions shell \
-        build generate templates convert distribution validate \
+        build generate templates convert distribution validate manifest-save manifest-diff \
         test check \
         template-checkout template-update pin release release-tools check-downloads \
-        clean fix-owner host-only _gh-check _validate-markdown _validate-images _validate-asciidoc
+        clean fix-owner host-only _gh-check _validate-markdown _validate-images _validate-asciidoc _validate-content
 
 ##@ Help
 
@@ -124,6 +128,7 @@ help: ## Show this help
 	@echo "  REPO=owner/repo    release, release-tools: repository of the release (default: arc42/arc42-template)"
 	@echo "  PRERELEASE=1       release: publish as pre-release (never becomes latest)"
 	@echo "  TOOLS_TAG=tools-YYYY.MM  release-tools: tag of the tools release"
+	@echo "  BASE=file          manifest-save, manifest-diff: manifest.json of the build to compare with (default: baseline-manifest.json)"
 	@echo "  PREFIX=url         check-downloads: prefix of the file URLs, e.g. https://github.com/arc42/arc42-template/releases/latest/download/"
 	@echo "  CHECKSUMS=1        check-downloads: download every file and compare its SHA-256 with manifest.json"
 	@echo "  DOCKER_RUN_OPTS    extra options for docker compose run, e.g. -e GITHUB_ACTIONS=true (used by the CI of arc42-template)"
@@ -174,8 +179,17 @@ distribution: ## Phase 4: create the distribution ZIPs
 	$(RUN) groovy build.groovy distribution $(BUILD_OPTS)
 	$(FIX_OWNER)
 
-validate: ## Check the output: Markdown with cmark (warnings only), images of the with-help styles and AsciiDoc includes (fail)
-	$(RUN) make --no-print-directory _validate-markdown _validate-images _validate-asciidoc BUILD_DIR=$(BUILD_DIR)
+validate: ## Check the output (fails the build): content of every format and the ZIPs, Markdown with cmark, images, AsciiDoc includes
+	$(RUN) make --no-print-directory _validate-markdown _validate-images _validate-asciidoc _validate-content BUILD_DIR=$(BUILD_DIR) \
+	  CHECK_OPTS="$(strip $(if $(TEMPLATE),--config=/project/buildconfig.groovy) $(if $(FORMAT),--format=$(FORMAT)))"
+
+manifest-save: ## Keep build/dist/manifest.json as BASE, to compare a later build with it (make manifest-diff)
+	@[ -f $(DIST_DIR)/manifest.json ] || { echo "✗ No $(DIST_DIR)/manifest.json: run make build first" >&2; exit 1; }
+	@cp $(DIST_DIR)/manifest.json "$(BASE)" && echo "✓ Saved $(DIST_DIR)/manifest.json as $(BASE)"
+
+manifest-diff: ## Compare the ZIPs of this build (name, SHA-256) with those of BASE; fails if any differ
+	@[ -f "$(BASE)" ] || { echo "✗ No $(BASE): build the state to compare with, then: make manifest-save" >&2; exit 2; }
+	$(RUN) groovy compare-manifests.groovy "$(BASE)" $(DIST_DIR)/manifest.json
 
 ##@ Tests
 
@@ -314,18 +328,23 @@ host-only:
 	  echo "✗ This target uses your git identity and credentials: run it outside the container." >&2; exit 1; \
 	fi
 
-# CommonMark syntax of the Markdown output; problems are reported, never fatal
+# CommonMark syntax of all Markdown formats. cmark accepts almost any text, so this catches only
+# files it cannot read at all; the content is checked by _validate-content.
 _validate-markdown:
-	@echo "==> CommonMark validation of the Markdown output (warnings only)"
+	@echo "==> CommonMark validation of the Markdown output (fails the build)"
 	@checked=0; failed=0; \
-	for f in $(BUILD_DIR)/*/markdown/*/*.md; do \
+	for f in $(foreach format,$(MARKDOWN_FORMATS),$(BUILD_DIR)/*/$(format)/*/*.md); do \
 	  [ -f "$$f" ] || continue; \
 	  checked=$$((checked + 1)); \
-	  cmark "$$f" > /dev/null 2>&1 || { echo "  ⚠ $$f"; failed=$$((failed + 1)); }; \
+	  cmark "$$f" > /dev/null 2>&1 || { echo "  ✗ $$f"; failed=$$((failed + 1)); }; \
 	done; \
-	if [ $$checked -eq 0 ]; then echo "⚠ No Markdown files under $(BUILD_DIR)/*/markdown/ (nothing validated)"; \
+	if [ $$checked -eq 0 ]; then echo "⚠ No Markdown files under $(BUILD_DIR)/ (nothing validated)"; \
 	elif [ $$failed -eq 0 ]; then echo "✓ All $$checked Markdown files are valid CommonMark"; \
-	else echo "⚠ $$failed of $$checked Markdown files failed the CommonMark validation (not fatal)"; fi
+	else echo "✗ $$failed of $$checked Markdown files failed the CommonMark validation" >&2; exit 1; fi
+
+# Content of every output and of the distribution ZIPs (lib/OutputCheck.groovy)
+_validate-content:
+	@groovy check-output.groovy $(CHECK_OPTS)
 
 # Images of the with-help styles (the plain styles contain none): every images/ directory of
 # FORMATS_WITH_IMAGES present and non-empty, every image reference in the Markdown resolvable.

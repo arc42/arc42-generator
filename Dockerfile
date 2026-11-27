@@ -89,12 +89,14 @@ FROM alpine:3.20
 
 # Install only runtime dependencies (no wget/unzip needed; pandoc is copied
 # from the builder stage below instead of being installed from apk)
+# - poppler-utils: pdfinfo and pdftotext, for the output check of the PDFs (make validate)
 RUN apk add --no-cache \
     openjdk21-jre-headless \
     bash \
     git \
     make \
-    cmark
+    cmark \
+    poppler-utils
 
 # Fix Git ownership for mounted volumes (Codespaces/CI environments)
 RUN git config --global --add safe.directory '*'
@@ -125,7 +127,7 @@ ENV ARC42_IN_CONTAINER=1
 WORKDIR /workspace
 
 # Copy only necessary project files (Makefile and generator source)
-COPY Makefile build.groovy buildconfig.groovy init-groovy-deps.groovy ./
+COPY Makefile build.groovy buildconfig.groovy init-groovy-deps.groovy check-output.groovy compare-manifests.groovy check-downloads.groovy ./
 COPY lib/ ./lib/
 
 # Default command: the full arc42 build

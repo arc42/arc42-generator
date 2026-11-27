@@ -186,6 +186,23 @@ try {
     assert !releaseDir.exists(), "without a release tag nothing is written to build/release/"
     println "✓ Test 8 passed\n"
 
+    println "=== Test 9: two manifests are compared by name and sha256 ==="
+    packageAll(true, [templateCommit: 'abc123'])
+    def base = new JsonSlurper().parse(manifestFile)
+    def same = packagerClass.diffManifests(base, new JsonSlurper().parse(manifestFile))
+    assert same == [added: [], removed: [], changed: [], unchanged: 12, sameTemplate: true], "identical manifests: ${same}"
+    new File(fixture, 'build/DE/docx/plain/demo-template.docx').append(' changed', 'utf-8')
+    new File(fixture, 'build/ZH/html/plain').deleteDir()
+    new File(fixture, 'build/EN/rst/plain').mkdirs()
+    new File(fixture, 'build/EN/rst/plain/demo-template.rst').write('new format', 'utf-8')
+    distDir.listFiles().findAll { it.name.endsWith('.zip') }*.delete()
+    packageAll(true, [templateCommit: 'def456'])
+    def diff = packagerClass.diffManifests(base, new JsonSlurper().parse(manifestFile))
+    assert diff.changed == ['demo-template-DE-plain-docx.zip'], "only the changed DOCX differs: ${diff.changed}"
+    assert diff.added == ['demo-template-EN-plain-rst.zip'] && diff.removed == ['demo-template-ZH-plain-html.zip'], "added and removed: ${diff}"
+    assert diff.unchanged == 10 && !diff.sameTemplate, "ten identical files, another template commit: ${diff}"
+    println "✓ Test 9 passed\n"
+
     println "=== All Tests Passed! ==="
     System.exit(0)
 

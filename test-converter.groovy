@@ -92,6 +92,23 @@ try {
         mdFiles.each { f -> println "  - ${f.name}" }
         println "✓ Test 8 passed\n"
 
+        println "=== Test 8b: Multi-page output holds the chapters the main document includes, nothing else ==="
+        def orphan = new File(enPlain.srcDir, 'zz_not_included.adoc')
+        orphan.write("== Not included\n\nORPHAN\n", 'utf-8')
+        try {
+            def chapters = converter.chapterFiles(enPlain)*.name
+            assert !chapters.contains(orphan.name) && !chapters.contains('config.adoc') && !chapters.contains("${config.project.name}.adoc".toString()),
+                "only included chapter files are chapters: ${chapters}"
+            assert chapters.contains('01_introduction_and_goals.adoc') && chapters == chapters.sort(false), "sorted chapter files: ${chapters}"
+            converter.cleanOutputs([enPlain], ['markdownMP'], 'build2/test')
+            def mpDir = new File(converter.convertTemplate(enPlain, 'markdownMP', 'build2/test'))
+            def pages = (mpDir.list() as List).findAll { it.endsWith('.md') }.sort()
+            assert pages == chapters.collect { it.replace('.adoc', '.md') }, "one page per included chapter: ${pages}"
+        } finally {
+            orphan.delete()
+        }
+        println "✓ Test 8b passed\n"
+
     } else {
         println "⚠ Pandoc not available, skipping Pandoc tests"
     }
