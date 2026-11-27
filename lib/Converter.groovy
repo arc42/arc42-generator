@@ -41,6 +41,9 @@ class Converter {
     static final String PDF_THEME = 'lib/pdf-theme.yml'
     static final List<String> PDF_FALLBACK_FONT_DIRS = ['/usr/share/fonts/noto', '/usr/share/fonts/droid-nonlatin']
 
+    /** Languages written in Cyrillic script (LaTeX output: font encoding T2A) */
+    static final List<String> CYRILLIC_LANGUAGES = ['RU', 'UKR']
+
     /**
      * Formats that cannot use SVG images: the LaTeX output does not compile with SVGs, and older Word
      * versions show nothing. For them an SVG is replaced by the PNG of the same name next to it, if present.
@@ -267,8 +270,8 @@ class Converter {
             pandocArgs.addAll(['--metadata', "identifier=${epubIdentifier(template)}".toString()])
         }
 
-        // Special handling for Russian language (LaTeX)
-        if (format == 'latex' && language == 'RU') {
+        // Cyrillic needs the T2A font encoding when the LaTeX file is compiled with pdfLaTeX
+        if (format == 'latex' && language in CYRILLIC_LANGUAGES) {
             pandocArgs.addAll(['-V', 'fontenc=T1,T2A'])
         }
 

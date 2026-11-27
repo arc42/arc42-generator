@@ -109,6 +109,18 @@ try {
         }
         println "✓ Test 8b passed\n"
 
+        println "=== Test 8c: LaTeX of the Cyrillic languages uses the T2A font encoding ==="
+        ['RU', 'UKR'].each { lang ->
+            def cyrillic = templates.find { it.language == lang && it.style == 'plain' }
+            if (cyrillic) {
+                def tex = new File(converter.convertViaPandoc(cyrillic, 'latex', "build2/test/${lang}/latex/plain")).getText('utf-8')
+                assert tex.contains('\\usepackage[T1,T2A]{fontenc}'), "${lang} LaTeX should load T2A"
+            }
+        }
+        def enTex = new File(converter.convertViaPandoc(enPlain, 'latex', 'build2/test/EN/latex/plain')).getText('utf-8')
+        assert enTex.contains('\\usepackage[T1]{fontenc}'), "EN LaTeX keeps T1 only"
+        println "✓ Test 8c passed\n"
+
     } else {
         println "⚠ Pandoc not available, skipping Pandoc tests"
     }
