@@ -42,6 +42,12 @@ class Converter {
     static final List<String> PDF_FALLBACK_FONT_DIRS = ['/usr/share/fonts/noto', '/usr/share/fonts/droid-nonlatin']
 
     /**
+     * Formats that cannot use SVG images: the LaTeX output does not compile with SVGs, and older Word
+     * versions show nothing. For them an SVG is replaced by the PNG of the same name next to it, if present.
+     */
+    static final List<String> RASTER_IMAGE_FORMATS = ['docx', 'latex']
+
+    /**
      * Unix timestamp (seconds) that Pandoc uses for the dates inside DOCX and EPUB files instead of "now",
      * so that unchanged content produces identical files. Null keeps Pandoc's default (current time).
      */
@@ -237,6 +243,12 @@ class Converter {
 
         // Build Pandoc command - use relative path to DocBook file since we'll run from docbookDir
         def docbookFileName = projectName + '.xml'
+        // SVGs replaced by PNGs in a copy of the DocBook file: the original is also the docbook download
+        def rasterDocbook = null
+        if (format in RASTER_IMAGE_FORMATS) {
+            rasterDocbook = writeWithRasterImages(new File(docbookDir, docbookFileName), "${projectName}-${format}.xml")
+            if (rasterDocbook) docbookFileName = rasterDocbook.name
+        }
         def pandocArgs = [
             'pandoc',
             '-r', 'docbook',
@@ -268,7 +280,11 @@ class Converter {
 
         // Execute Pandoc with UTF-8 environment
         // IMPORTANT: Run from docbook directory so Pandoc can find relative image paths
-        runPandoc(pandocArgs, new File(docbookDir), "${template.language}/${template.style} ${format}")
+        try {
+            runPandoc(pandocArgs, new File(docbookDir), "${template.language}/${template.style} ${format}")
+        } finally {
+            rasterDocbook?.delete()
+        }
 
         // Post-processing for LaTeX (fix unicode characters)
         if (format == 'latex') {
@@ -328,6 +344,29 @@ class Converter {
         targetMainFile.write(mainContent, 'utf-8')
 
         return targetMainFile.absolutePath
+    }
+
+    /**
+     * Write a copy of a DocBook file, next to it, in which every image reference to an SVG
+     * (fileref="images/logo.svg") points to the PNG of the same name instead, if that PNG exists
+     * relative to the DocBook file. SVGs without such a PNG stay as they are.
+     *
+     * @return the copy, or null if no reference was replaced (then the original is used)
+     */
+    File writeWithRasterImages(File docbookFile, String copyName) {
+        def baseDir = docbookFile.parentFile
+        def replaced = 0
+        def content = docbookFile.getText('utf-8').replaceAll(/fileref="([^"]+)\.svg"/) { all, path ->
+            if (new File(baseDir, "${path}.png").isFile()) {
+                replaced++
+                return "fileref=\"${path}.png\"".toString()
+            }
+            return all
+        }
+        if (replaced == 0) return null
+        def copy = new File(baseDir, copyName)
+        copy.write(content, 'utf-8')
+        return copy
     }
 
     /**

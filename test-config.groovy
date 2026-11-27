@@ -56,6 +56,7 @@ CHAPTER CONTENT
 new File(fixture, 'EN/adoc/about-security.adoc').write("== About security\n\nA REAL CHAPTER\n", 'utf-8')
 new File(fixture, 'EN/version.properties').write("revnumber=1.0-EN\nrevdate=2026\nrevremark=(test)\n", 'utf-8')
 new File(fixture, 'EN/images/demo-logo.png').bytes = [1, 2, 3] as byte[]
+new File(fixture, 'EN/images/demo-logo.svg').write('<svg xmlns="http://www.w3.org/2000/svg"/>', 'utf-8')
 new File(fixture, 'EN/images/example.png').bytes = [4, 5, 6] as byte[]
 
 // paths inside the config are relative to the config file, as in build.groovy
@@ -81,11 +82,11 @@ try {
     assert new File(withHelp, '01_chapter.adoc').getText('utf-8').contains('HELP TEXT'), "with-help must contain help"
     println "✓ Test 1 passed\n"
 
-    println "=== Test 2: Only the configured logo ends up in plain ==="
+    println "=== Test 2: Only the configured logo (in all its formats) ends up in plain ==="
     def plainImages = (new File(fixture, 'build/src_gen/EN/asciidoc/plain/images').list() as List).sort()
     def withHelpImages = (new File(fixture, 'build/src_gen/EN/asciidoc/with-help/images').list() as List).sort()
-    assert plainImages == ['demo-logo.png'], "plain should only contain the logo, got ${plainImages}"
-    assert withHelpImages == ['demo-logo.png', 'example.png'], "with-help should contain all images, got ${withHelpImages}"
+    assert plainImages == ['demo-logo.png', 'demo-logo.svg'], "plain should only contain the logo (PNG and SVG), got ${plainImages}"
+    assert withHelpImages == ['demo-logo.png', 'demo-logo.svg', 'example.png'], "with-help should contain all images, got ${withHelpImages}"
     println "✓ Test 2 passed\n"
 
     println "=== Test 3: Output goes next to the config file, not into the generator ==="
