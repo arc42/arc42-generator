@@ -36,13 +36,19 @@ jobs:
         run: |
           base=${{ github.event.pull_request.base.sha }}
           template=$(git -C arc42-template rev-parse HEAD)
-          git fetch -q --depth=1 origin "$base"
-          git worktree add -q ../base "$base"
+          # a clone of its own: its git data must lie inside the directory that is mounted into the
+          # container, otherwise the base build finds no template commit and uses the build time
+          git clone -q "${{ github.server_url }}/${{ github.repository }}" ../base
+          git -C ../base checkout -q "$base"
           git -C ../base submodule update -q --init --recursive
-          git -C ../base/arc42-template fetch -q origin "$template"
           git -C ../base/arc42-template checkout -q "$template"
           make -C ../base generate > base-build.log 2>&1 || { tail -n 50 base-build.log; exit 1; }
           cp ../base/build/dist/manifest.json baseline-manifest.json
+          # the base build must have found the same template commit and timestamp as this build
+          grep -E "SOURCE_DATE_EPOCH" base-build.log || true
+          (cd ../base && docker compose run --rm arc42-builder git -C arc42-template log -1 --format='%H %ct') || true
+          # the base build may have replaced the image by that of its own Dockerfile
+          make image > image-build.log 2>&1 || { tail -n 50 image-build.log; exit 1; }
           {
             echo "## Distribution ZIPs compared with the base branch"
             echo '```'
