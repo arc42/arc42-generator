@@ -100,6 +100,10 @@ SECTION THREE CONTENT
     new File(fixture, "${lang}/images/vector.svg").write(
         '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="20"><rect width="40" height="20" fill="#005CA9"/></svg>', 'utf-8')
     png(new File(fixture, "${lang}/images/vector.png"), 0x005CA9)
+    // the terms of a translation: kept next to the template, never converted or published
+    new File(fixture, "${lang}/translation").mkdirs()
+    new File(fixture, "${lang}/translation/terms.adoc").write(
+        "= Translation terms: ${lang}\n\n|===\n| EN term | ${lang} term | Why\n\n| Building block | UNPUBLISHED-TERM |\n|===\n", 'utf-8')
 }
 
 def config = new ConfigSlurper().parse(new File(fixture, 'buildconfig.groovy').toURI().toURL())
@@ -162,6 +166,25 @@ try {
     assert clean.checked.outputs == 2 * 2 * 13, "every language, style and format should be checked: ${clean.checked}"
     assert clean.checked.zips == 52 && clean.checked.pdfs == 4 && clean.checked.textFiles > 40, "unexpected scope: ${clean.checked}"
     println "✓ Test 1 passed (${clean.checked})\n"
+
+    println "=== Test 1b: <LANG>/translation/ is not part of the template: it is in no output and in no ZIP ==="
+    def leaked = []
+    build.eachFileRecurse { file ->
+        if (!file.isFile()) return
+        if (file.path.contains('translation') || file.name == 'terms.adoc') leaked << file.path
+        else if (new String(file.bytes, 'ISO-8859-1').contains('UNPUBLISHED-TERM')) leaked << "${file.path} (content)"
+    }
+    dist.listFiles().findAll { it.name.endsWith('.zip') }.each { zipFile ->
+        new java.util.zip.ZipFile(zipFile).withCloseable { zip ->
+            zip.entries().each { entry ->
+                if (entry.name.contains('translation') || entry.name.endsWith('terms.adoc')) leaked << "${zipFile.name}!${entry.name}"
+                else if (new String(zip.getInputStream(entry).readAllBytes(), 'ISO-8859-1').contains('UNPUBLISHED-TERM')) leaked << "${zipFile.name}!${entry.name} (content)"
+            }
+        }
+    }
+    assert leaked.isEmpty(), "the translation terms must not be generated, converted or packaged: ${leaked.take(5)}"
+    assert new File(fixture, 'EN/translation/terms.adoc').isFile(), "the fixture should contain the translation terms"
+    println "✓ Test 1b passed\n"
 
     println "=== Test 2: Leftover AsciiDoc and wrong encoding are reported ==="
     new File(build, 'EN/markdown/plain/demo-template-EN.md').append('\nifdef::demohelp[]\n', 'utf-8')
