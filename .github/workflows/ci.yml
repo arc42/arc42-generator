@@ -44,6 +44,9 @@ jobs:
           git -C ../base/arc42-template checkout -q "$template"
           make -C ../base generate > base-build.log 2>&1 || { tail -n 50 base-build.log; exit 1; }
           cp ../base/build/dist/manifest.json baseline-manifest.json
+          # the base build must have found the same template commit and timestamp as this build
+          grep -E "SOURCE_DATE_EPOCH" base-build.log || true
+          (cd ../base && docker compose run --rm arc42-builder git -C arc42-template log -1 --format='%H %ct') || true
           # the base build may have replaced the image by that of its own Dockerfile
           make image > image-build.log 2>&1 || { tail -n 50 image-build.log; exit 1; }
           {
