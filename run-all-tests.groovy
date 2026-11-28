@@ -53,6 +53,16 @@ def tests = [
         name: "Download Check",
         script: "test-downloads.groovy",
         description: "Tests the download check: missing files, redirects, checksums against the manifest"
+    ],
+    [
+        name: "Command Line",
+        script: "test-cli.groovy",
+        description: "Tests that build.groovy rejects unknown phases, options and formats"
+    ],
+    [
+        name: "Output Checks",
+        script: "test-outputcheck.groovy",
+        description: "Tests the checks of the converted output and the ZIPs (make validate) on damaged output"
     ]
 ]
 

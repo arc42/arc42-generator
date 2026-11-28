@@ -73,14 +73,15 @@ WORKDIR /workspace
 # Copy project files
 COPY . /workspace
 
-# Pre-download Groovy dependencies to cache them in the image
+# Pre-download Groovy dependencies to cache them in the image; a failed download fails the image
+# build (otherwise every container would download them again, or fail without network).
 # Then clean up unnecessary files (source JARs, javadocs) to save space
 RUN groovy ./init-groovy-deps.groovy 2>&1 && \
     echo "Cleaning up Groovy Grape cache..." && \
-    find /root/.groovy/grapes -name "*-sources.jar" -delete 2>/dev/null || true && \
-    find /root/.groovy/grapes -name "*-javadoc.jar" -delete 2>/dev/null || true && \
-    find /root/.groovy/grapes -type d -name "cache" -exec rm -rf {} + 2>/dev/null || true && \
-    echo "Cleanup complete" || echo "Warning: Could not pre-cache dependencies"
+    { find /root/.groovy/grapes -name "*-sources.jar" -delete 2>/dev/null; \
+      find /root/.groovy/grapes -name "*-javadoc.jar" -delete 2>/dev/null; \
+      find /root/.groovy/grapes -type d -name "cache" -exec rm -rf {} + 2>/dev/null; \
+      echo "Cleanup complete"; }
 
 # ============================================================================
 # Stage 2: Runtime - Minimal image with only what's needed to run builds
@@ -89,12 +90,14 @@ FROM alpine:3.20
 
 # Install only runtime dependencies (no wget/unzip needed; pandoc is copied
 # from the builder stage below instead of being installed from apk)
+# - poppler-utils: pdfinfo and pdftotext, for the output check of the PDFs (make validate)
 RUN apk add --no-cache \
     openjdk21-jre-headless \
     bash \
     git \
     make \
-    cmark
+    cmark \
+    poppler-utils
 
 # Fix Git ownership for mounted volumes (Codespaces/CI environments)
 RUN git config --global --add safe.directory '*'
@@ -125,7 +128,7 @@ ENV ARC42_IN_CONTAINER=1
 WORKDIR /workspace
 
 # Copy only necessary project files (Makefile and generator source)
-COPY Makefile build.groovy buildconfig.groovy init-groovy-deps.groovy ./
+COPY Makefile build.groovy buildconfig.groovy init-groovy-deps.groovy check-output.groovy compare-manifests.groovy check-downloads.groovy ./
 COPY lib/ ./lib/
 
 # Default command: the full arc42 build

@@ -1,5 +1,6 @@
 build
 build2
+baseline-manifest.json
 *.iml
 src_gen
 .idea

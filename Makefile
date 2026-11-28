@@ -38,6 +38,10 @@ TOOLS_TAG ?=
 # check-downloads: where the files are served; CHECKSUMS=1 downloads them and compares the SHA-256
 PREFIX ?=
 CHECKSUMS ?=
+# manifest-save, manifest-diff: the manifest.json of an earlier build that the current one is compared with
+BASE ?= baseline-manifest.json
+# SHA-256 on the host (release): sha256sum on Linux, shasum on macOS
+SHA256SUM := $(if $(shell command -v sha256sum 2>/dev/null),sha256sum,shasum -a 256)
 PRERELEASE_ON := $(filter 1 true yes,$(PRERELEASE))
 # a template release (tag YYYY.MM.DD[.n], not a pre-release) exists on REPO; tools releases do not count
 HAS_TEMPLATE_RELEASE = gh release list -R $(REPO) --exclude-pre-releases --exclude-drafts --limit 100 --json tagName -q '.[].tagName' | grep -qE '^[0-9]{4}\.[0-9]{2}\.[0-9]{2}(\.[0-9]+)?$$'
@@ -96,13 +100,16 @@ FIX_OWNER = @$(MAKE) --no-print-directory fix-owner
 
 # with-help output of these formats must ship a non-empty images/ directory
 FORMATS_WITH_IMAGES := markdown asciidoc textile rst html
+MARKDOWN_FORMATS := markdown markdownStrict gitHubMarkdown markdownMP markdownMPStrict gitHubMarkdownMP
+CHECK_OPTS ?=
 TEST_SCRIPTS := $(patsubst test-%.groovy,%,$(wildcard test-*.groovy))
 
 .PHONY: help image image-fresh versions shell \
-        build generate templates convert distribution validate \
+        build generate templates convert distribution validate manifest-save manifest-diff \
         test check \
         template-checkout template-update pin release release-tools check-downloads \
-        clean fix-owner host-only _gh-check _validate-markdown _validate-images _validate-asciidoc
+        clean fix-owner host-only _gh-check _validate-markdown _validate-images _validate-asciidoc _validate-content \
+        _verify-release-files
 
 ##@ Help
 
@@ -124,6 +131,7 @@ help: ## Show this help
 	@echo "  REPO=owner/repo    release, release-tools: repository of the release (default: arc42/arc42-template)"
 	@echo "  PRERELEASE=1       release: publish as pre-release (never becomes latest)"
 	@echo "  TOOLS_TAG=tools-YYYY.MM  release-tools: tag of the tools release"
+	@echo "  BASE=file          manifest-save, manifest-diff: manifest.json of the build to compare with (default: baseline-manifest.json)"
 	@echo "  PREFIX=url         check-downloads: prefix of the file URLs, e.g. https://github.com/arc42/arc42-template/releases/latest/download/"
 	@echo "  CHECKSUMS=1        check-downloads: download every file and compare its SHA-256 with manifest.json"
 	@echo "  DOCKER_RUN_OPTS    extra options for docker compose run, e.g. -e GITHUB_ACTIONS=true (used by the CI of arc42-template)"
@@ -174,8 +182,17 @@ distribution: ## Phase 4: create the distribution ZIPs
 	$(RUN) groovy build.groovy distribution $(BUILD_OPTS)
 	$(FIX_OWNER)
 
-validate: ## Check the output: Markdown with cmark (warnings only), images of the with-help styles and AsciiDoc includes (fail)
-	$(RUN) make --no-print-directory _validate-markdown _validate-images _validate-asciidoc BUILD_DIR=$(BUILD_DIR)
+validate: ## Check the output (fails the build): content of every format and the ZIPs, Markdown with cmark, images, AsciiDoc includes
+	$(RUN) make --no-print-directory _validate-markdown _validate-images _validate-asciidoc _validate-content BUILD_DIR=$(BUILD_DIR) \
+	  CHECK_OPTS="$(strip $(if $(TEMPLATE),--config=/project/buildconfig.groovy) $(if $(FORMAT),--format=$(FORMAT)))"
+
+manifest-save: ## Keep build/dist/manifest.json as BASE, to compare a later build with it (make manifest-diff)
+	@[ -f $(DIST_DIR)/manifest.json ] || { echo "✗ No $(DIST_DIR)/manifest.json: run make build first" >&2; exit 1; }
+	@cp $(DIST_DIR)/manifest.json "$(BASE)" && echo "✓ Saved $(DIST_DIR)/manifest.json as $(BASE)"
+
+manifest-diff: ## Compare the ZIPs of this build (name, SHA-256) with those of BASE; fails if any differ
+	@[ -f "$(BASE)" ] || { echo "✗ No $(BASE): build the state to compare with, then: make manifest-save" >&2; exit 2; }
+	$(RUN) groovy compare-manifests.groovy "$(BASE)" $(DIST_DIR)/manifest.json
 
 ##@ Tests
 
@@ -225,7 +242,8 @@ ifneq ($(TEMPLATE),)
 	$(error release is for arc42 only)
 endif
 	@if gh release view "$(TAG)" -R $(REPO) >/dev/null 2>&1 || gh api "repos/$(REPO)/git/ref/tags/$(TAG)" >/dev/null 2>&1; then \
-	  echo "✗ Tag $(TAG) exists on $(REPO). A second release on the same day: make release TAG=$(TAG).2" >&2; exit 1; \
+	  echo "✗ Tag or release $(TAG) exists on $(REPO). A second release on the same day: make release TAG=$(TAG).2" >&2; \
+	  echo "  An unfinished draft of a failed attempt is removed with: gh release delete $(TAG) -R $(REPO) --yes" >&2; exit 1; \
 	fi
 	@git -C $(SUBMODULE) fetch -q origin $(TEMPLATE_BRANCH)
 	@pinned=$$(git rev-parse HEAD:$(SUBMODULE)); \
@@ -237,6 +255,8 @@ endif
 	  echo "✗ The recorded $(SUBMODULE) commit is not the newest $(TEMPLATE_BRANCH): the ZIPs would not match the template." >&2; \
 	  echo "  Merge the pending pin update (Dependabot) first, or: make release UPDATE_TEMPLATE=1" >&2; exit 1; \
 	fi
+	@# a release is built by a generator whose tests pass
+	@$(MAKE) --no-print-directory test
 	@# the same template content as recorded (or UPDATE_TEMPLATE): build from $(TEMPLATE_BRANCH)
 	@$(MAKE) --no-print-directory build UPDATE_TEMPLATE=1 OPTS="$(strip $(OPTS) --release-tag=$(TAG))"
 	@# nothing to release: the files (names and SHA-256) equal the manifest of the latest release;
@@ -252,10 +272,18 @@ endif
 	if ! gh api "repos/$(REPO)/commits/$$commit" >/dev/null 2>&1; then \
 	  echo "✗ Template commit $$commit is not in $(REPO) (a fork that is behind? sync it first)" >&2; exit 1; \
 	fi; \
-	echo "==> Publishing release $(TAG) on $(REPO) ($$(wc -l < build/release/files.txt | tr -d ' ') files)"; \
-	gh release create "$(TAG)" -R $(REPO) --target "$$commit" --title "arc42 template $(TAG)" \
-	  --notes-file build/release/notes.md $(if $(PRERELEASE_ON),--prerelease,--latest) \
-	  $$(sed 's|^|$(DIST_DIR)/|' build/release/files.txt) && \
+	echo "==> Uploading release $(TAG) to $(REPO) as draft ($$(wc -l < build/release/files.txt | tr -d ' ') files)"; \
+	gh release create "$(TAG)" -R $(REPO) --draft --target "$$commit" --title "arc42 template $(TAG)" \
+	  --notes-file build/release/notes.md $(if $(PRERELEASE_ON),--prerelease) \
+	  $$(sed 's|^|$(DIST_DIR)/|' build/release/files.txt) || { \
+	  echo "✗ The upload failed; nothing is published. Remove the draft before the next attempt: gh release delete $(TAG) -R $(REPO) --yes" >&2; exit 1; }; \
+	echo "==> Downloading the draft again and comparing it with the build"; \
+	rm -rf build/release/download && mkdir -p build/release/download && \
+	gh release download "$(TAG)" -R $(REPO) --dir build/release/download && \
+	$(MAKE) --no-print-directory _verify-release-files DIR=build/release/download || { \
+	  echo "✗ The uploaded files are not those of the build; nothing is published. The draft is kept for inspection," >&2; \
+	  echo "  remove it with: gh release delete $(TAG) -R $(REPO) --yes" >&2; exit 1; }; \
+	gh release edit "$(TAG)" -R $(REPO) --draft=false $(if $(PRERELEASE_ON),,--latest) >/dev/null && \
 	echo "✓ Published https://github.com/$(REPO)/releases/tag/$(TAG)" || exit 1; \
 	if [ -z "$(PRERELEASE_ON)" ] && [ "$(REPO)" = "arc42/arc42-template" ]; then \
 	  if gh api repos/$(SITE_REPO)/dispatches -f event_type=template-released -f "client_payload[tag]=$(TAG)" >/dev/null 2>&1; then \
@@ -309,23 +337,42 @@ _gh-check:
 	@command -v gh >/dev/null 2>&1 || { echo "✗ Releases need the GitHub CLI gh on this machine (it is not in the image): https://cli.github.com" >&2; exit 1; }
 	@gh auth status -h github.com >/dev/null 2>&1 || { echo "✗ gh is not logged in to github.com: gh auth login" >&2; exit 1; }
 
+# The files in DIR (downloaded from a release) are those of the build: manifest.json is identical,
+# and DIR holds exactly the ZIPs of the manifest, each with its SHA-256
+_verify-release-files:
+	@[ -n "$(DIR)" ] && [ -d "$(DIR)" ] || { echo "✗ _verify-release-files needs DIR=<directory with the downloaded files>" >&2; exit 2; }
+	@cmp -s "$(DIR)/manifest.json" $(DIST_DIR)/manifest.json || { echo "✗ $(DIR)/manifest.json differs from $(DIST_DIR)/manifest.json" >&2; exit 1; }
+	@expected=$$(awk -F'"' '/"name":/ {name = $$4} /"sha256":/ {print $$4 "  " name}' $(DIST_DIR)/manifest.json | sort -k2); \
+	actual=$$(cd "$(DIR)" && ls | grep -v '^manifest\.json$$' | while IFS= read -r f; do $(SHA256SUM) "$$f"; done | sed 's/ [ *]/  /' | sort -k2); \
+	if [ -n "$$expected" ] && [ "$$expected" = "$$actual" ]; then \
+	  echo "✓ $$(echo "$$expected" | wc -l | tr -d ' ') files in $(DIR) have the SHA-256 of the manifest"; \
+	else \
+	  echo "✗ The files in $(DIR) differ from the manifest (< manifest, > $(DIR)):" >&2; \
+	  diff <(echo "$$expected") <(echo "$$actual") | grep '^[<>]' | head -n 20 >&2; exit 1; \
+	fi
+
 host-only:
 	@if [ -n "$(ARC42_IN_CONTAINER)" ]; then \
 	  echo "✗ This target uses your git identity and credentials: run it outside the container." >&2; exit 1; \
 	fi
 
-# CommonMark syntax of the Markdown output; problems are reported, never fatal
+# CommonMark syntax of all Markdown formats. cmark accepts almost any text, so this catches only
+# files it cannot read at all; the content is checked by _validate-content.
 _validate-markdown:
-	@echo "==> CommonMark validation of the Markdown output (warnings only)"
+	@echo "==> CommonMark validation of the Markdown output (fails the build)"
 	@checked=0; failed=0; \
-	for f in $(BUILD_DIR)/*/markdown/*/*.md; do \
+	for f in $(foreach format,$(MARKDOWN_FORMATS),$(BUILD_DIR)/*/$(format)/*/*.md); do \
 	  [ -f "$$f" ] || continue; \
 	  checked=$$((checked + 1)); \
-	  cmark "$$f" > /dev/null 2>&1 || { echo "  ⚠ $$f"; failed=$$((failed + 1)); }; \
+	  cmark "$$f" > /dev/null 2>&1 || { echo "  ✗ $$f"; failed=$$((failed + 1)); }; \
 	done; \
-	if [ $$checked -eq 0 ]; then echo "⚠ No Markdown files under $(BUILD_DIR)/*/markdown/ (nothing validated)"; \
+	if [ $$checked -eq 0 ]; then echo "⚠ No Markdown files under $(BUILD_DIR)/ (nothing validated)"; \
 	elif [ $$failed -eq 0 ]; then echo "✓ All $$checked Markdown files are valid CommonMark"; \
-	else echo "⚠ $$failed of $$checked Markdown files failed the CommonMark validation (not fatal)"; fi
+	else echo "✗ $$failed of $$checked Markdown files failed the CommonMark validation" >&2; exit 1; fi
+
+# Content of every output and of the distribution ZIPs (lib/OutputCheck.groovy)
+_validate-content:
+	@groovy check-output.groovy $(CHECK_OPTS)
 
 # Images of the with-help styles (the plain styles contain none): every images/ directory of
 # FORMATS_WITH_IMAGES present and non-empty, every image reference in the Markdown resolvable.

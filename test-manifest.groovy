@@ -186,6 +186,46 @@ try {
     assert !releaseDir.exists(), "without a release tag nothing is written to build/release/"
     println "✓ Test 8 passed\n"
 
+    println "=== Test 9: a ZIP that cannot be written is a failure, not a skipped file ==="
+    def blocked = new File(distDir, 'demo-template-EN-plain-html.zip')
+    assert blocked.delete()
+    assert blocked.mkdir(), "a directory in place of the ZIP makes writing it fail"
+    new File(blocked, 'keep').write('x', 'utf-8')
+    def failing = packagerClass.newInstance(config, fixture)
+    failing.sourceDateEpoch = 1751328000L
+    def result = failing.createAllDistributions(found, null, true)
+    assert result == [total: 18, created: 11, skipped: 6, failed: 1], "one failed ZIP, the six rst ones have no output: ${result}"
+    def m9 = new JsonSlurper().parse(manifestFile)
+    assert !m9.files*.name.contains(blocked.name), "a failed ZIP must not be in the manifest"
+    def thrown = null
+    try {
+        failing.createZip(new File(fixture, 'build/EN/html/plain'), blocked)
+    } catch (IOException e) {
+        thrown = e
+    }
+    assert thrown?.message?.contains(blocked.name), "createZip should throw and name the file: ${thrown}"
+    assert blocked.deleteDir()
+    assert !failing.createZip(new File(fixture, 'build/EN/nothing/plain'), blocked) && !blocked.exists(),
+        "a missing source directory is no failure and writes nothing"
+    println "✓ Test 9 passed\n"
+
+    println "=== Test 10: two manifests are compared by name and sha256 ==="
+    packageAll(true, [templateCommit: 'abc123'])
+    def base = new JsonSlurper().parse(manifestFile)
+    def same = packagerClass.diffManifests(base, new JsonSlurper().parse(manifestFile))
+    assert same == [added: [], removed: [], changed: [], unchanged: 12, sameTemplate: true], "identical manifests: ${same}"
+    new File(fixture, 'build/DE/docx/plain/demo-template.docx').append(' changed', 'utf-8')
+    new File(fixture, 'build/ZH/html/plain').deleteDir()
+    new File(fixture, 'build/EN/rst/plain').mkdirs()
+    new File(fixture, 'build/EN/rst/plain/demo-template.rst').write('new format', 'utf-8')
+    distDir.listFiles().findAll { it.name.endsWith('.zip') }*.delete()
+    packageAll(true, [templateCommit: 'def456'])
+    def diff = packagerClass.diffManifests(base, new JsonSlurper().parse(manifestFile))
+    assert diff.changed == ['demo-template-DE-plain-docx.zip'], "only the changed DOCX differs: ${diff.changed}"
+    assert diff.added == ['demo-template-EN-plain-rst.zip'] && diff.removed == ['demo-template-ZH-plain-html.zip'], "added and removed: ${diff}"
+    assert diff.unchanged == 10 && !diff.sameTemplate, "ten identical files, another template commit: ${diff}"
+    println "✓ Test 10 passed\n"
+
     println "=== All Tests Passed! ==="
     System.exit(0)
 

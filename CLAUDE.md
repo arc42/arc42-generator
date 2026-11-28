@@ -14,14 +14,16 @@ The actual template content lives in the `arc42-template` git submodule (the "Go
 
 ```bash
 make help                     # all targets and variables
-make image                    # build the Docker image (Java, Groovy, Pandoc 3.7.0.2, cmark, make, git, PDF fallback fonts)
+make image                    # build the Docker image (Java, Groovy, Pandoc 3.7.0.2, cmark, poppler-utils, make, git, PDF fallback fonts); other targets rebuild it automatically when it is missing or Dockerfile/init-groovy-deps.groovy changed (checksum label org.arc42.image-inputs)
 make build                    # full arc42 build: template-checkout, generate, validate
 make build UPDATE_TEMPLATE=1  # the same with the newest arc42-template main
 make generate                 # groovy build.groovy (all phases), no checkout, no output validation
 make templates | convert | distribution   # single phases
-make validate                 # output checks: cmark (warnings only), with-help images (fatal)
+make validate                 # output checks, all fatal: content of every format and the ZIPs (check-output.groovy), cmark, with-help images, AsciiDoc includes
+make manifest-save            # keep build/dist/manifest.json as baseline-manifest.json (BASE=<file>)
+make manifest-diff            # ZIPs of this build that differ (name, SHA-256) from the saved manifest; fails if any differ
 make test                     # groovy run-all-tests.groovy
-make test-lint                # one test script (templates, discovery, converter, config, lint, manifest)
+make test-lint                # one test script (templates, discovery, converter, config, lint, manifest, downloads, cli, outputcheck)
 make template-checkout        # submodule at the recorded commit (git submodule update --init, in the container)
 make template-update          # submodule to the newest main
 make pin                      # commit the checked-out submodule commit (local git)
@@ -33,7 +35,7 @@ make shell | versions | image-fresh
 ```
 Variables: `OPTS="..."` (options for build.groovy, see below), `FORMAT=html`, `TEMPLATE=../req42-framework` (another template repository, mounted at `/project`, output below it), `UPDATE_TEMPLATE=1`, `SOURCE_DATE_EPOCH`, `TAG` (release tag, default today `YYYY.MM.DD`), `REPO` (release repository, default `arc42/arc42-template`; a fork for tests), `PRERELEASE=1`, `TOOLS_TAG`, `DOCKER_RUN_OPTS` (extra options for `docker compose run`; the arc42-template CI runs `make templates TEMPLATE=$GITHUB_WORKSPACE DOCKER_RUN_OPTS="-e GITHUB_ACTIONS=true -e GITHUB_STEP_SUMMARY=/project/..."`). Output is written below the current directory (`build/`, ZIPs in `build/dist/`) and, on Linux, handed back to the calling user (`fix-owner`).
 
-The output validation lives in the Makefile (`_validate-markdown`, `_validate-images`, `_validate-asciidoc`) and runs in the container. `release` builds the newest template main; it stops if main differs from the recorded submodule commit outside `dist/` (the `dist/` of old releases), unless `UPDATE_TEMPLATE=1`. It builds with `--release-tag=$(TAG)` and publishes a GitHub Release with the files of `build/release/files.txt` (the ZIPs of the manifest plus `manifest.json`) and the notes of `build/release/notes.md`, targeted at the manifest's `templateCommit`. If the files (names and SHA-256) equal the `manifest.json` of the latest release, nothing is published. Nothing is committed to arc42-template; its hand-made tool files live in its `other-formats/<tool>/` folders and are published by `release-tools`. After a real release on arc42 (not `PRERELEASE`, not a fork) it sends `repository_dispatch` `template-released` to `SITE_REPO` (default `arc42/arc42.org-site`), whose workflow refreshes the download page data; a failed dispatch is a warning only.
+The output validation runs in the container: `_validate-content` (`check-output.groovy`, `lib/OutputCheck.groovy`) and, in the Makefile, `_validate-markdown`, `_validate-images`, `_validate-asciidoc`. All of them fail the build. `release` runs the tests, then builds the newest template main; it stops if main differs from the recorded submodule commit outside `dist/` (the `dist/` of old releases), unless `UPDATE_TEMPLATE=1`. It builds with `--release-tag=$(TAG)` and uploads a GitHub Release with the files of `build/release/files.txt` (the ZIPs of the manifest plus `manifest.json`) and the notes of `build/release/notes.md`, targeted at the manifest's `templateCommit`, as draft; it downloads the draft again, compares it with the build (`_verify-release-files`) and only then publishes it. A failed upload or comparison leaves the draft (`gh release delete <TAG>` removes it). If the files (names and SHA-256) equal the `manifest.json` of the latest release, nothing is published. Nothing is committed to arc42-template; its hand-made tool files live in its `other-formats/<tool>/` folders and are published by `release-tools`. After a real release on arc42 (not `PRERELEASE`, not a fork) it sends `repository_dispatch` `template-released` to `SITE_REPO` (default `arc42/arc42.org-site`), whose workflow refreshes the download page data; a failed dispatch is a warning only.
 
 ### CLI Options
 Options of `build.groovy`, passed through make as `OPTS="..."` (e.g. `make templates OPTS=--lint=warn`):
@@ -44,6 +46,11 @@ Options of `build.groovy`, passed through make as `OPTS="..."` (e.g. `make templ
 - **Failure level**: `--failure-level=warn|error|fatal|none` (default `warn`): Asciidoctor and Pandoc diagnostics at this level or above fail the build
 - **Lint**: `--lint=warn`: report golden master problems (unbalanced `ifdef`, help blocks without `ifdef`, `ifdef::arc42help[]` without `:arc42help:` being set, missing images, incomplete `version.properties`) instead of failing on them
 - **Release tag**: `--release-tag=2026.09.29`: tag written to `manifest.json` (set by the release, left out otherwise)
+- **Help**: `--help`
+
+An unknown phase, option or format ends with exit code 2 before anything is built.
+
+**Changing the generator**: output is reproducible, so compare before and after. `make build && make manifest-save` on the old state, `make build && make manifest-diff` on the new one (same arc42-template commit): a refactoring changes no ZIP, an intended change exactly the ZIPs it claims. The CI lists the differing ZIPs of every pull request in the job summary.
 
 Every run starts from a clean output: the `templates` phase deletes `build/src_gen/`, the `convert` phase deletes the output directories (and DocBook intermediates) of the formats it converts. Nothing from an earlier run survives into the distribution ZIPs.
 
@@ -66,8 +73,8 @@ Main orchestration script that ties everything together. Supports CLI arguments 
 
 #### `lib/Templates.groovy`
 - **Language Auto-Discovery**: Scans `arc42-template/` for language directories matching `/^[A-Z]{2,}(-[A-Z]{2,})?$/` (e.g. `EN`, `UKR`, `ZH-TW`)
-- **Golden Master Validation**: `validateGoldenMaster()` reports errors (unbalanced `ifdef`/`endif`, help blocks without `ifdef`, `ifdef::arc42help[]` without `:arc42help:` being set, missing images, incomplete `version.properties`, a `revdate-iso` that is not `YYYY-MM`) and warnings (chapter set or help-block count differs from EN, no `revdate-iso`); errors fail `createFromGoldenMaster()` unless `failOnLintErrors` is false; in GitHub Actions (`GITHUB_ACTIONS=true`) every problem is also printed as annotation (`githubAnnotation()`) and a Markdown report (`lintReport()`) is appended to `GITHUB_STEP_SUMMARY`
-- **Feature Flag Removal**: Uses regex patterns to strip `[role="arc42help"]` blocks and `ifdef::arc42help` statements
+- **Golden Master Validation**: `validateGoldenMaster()` reports errors (unbalanced `ifdef`/`endif`, help blocks without or outside their `ifdef`, a sidebar (`****`) that is never closed, `ifdef::arc42help[]` without `:arc42help:` being set, missing images, incomplete `version.properties`, a `revdate-iso` that is not `YYYY-MM`) and warnings (chapter set or help-block count differs from EN, a chapter file that no document includes, an image that no document references, no `revdate-iso`); `////` comment blocks are skipped; errors fail `createFromGoldenMaster()` unless `failOnLintErrors` is false; in GitHub Actions (`GITHUB_ACTIONS=true`) every problem is also printed as annotation (`githubAnnotation()`) and a Markdown report (`lintReport()`) is appended to `GITHUB_STEP_SUMMARY`
+- **Feature Flag Removal**: `removeFeatures()` drops everything between `ifdef::arc42help[]` and its `endif::arc42help[]` (the two directive lines stay as empty lines), as Asciidoctor does for an unset attribute; a `[role="arc42help"]` block outside a conditional is removed by regex
 - **Template Generation**: Creates one template variant per language and style (15 languages × 2 styles = 30 for arc42)
 
 #### `lib/Discovery.groovy`
@@ -80,19 +87,23 @@ Main orchestration script that ties everything together. Supports CLI arguments 
 - **PDF**: AsciidoctorJ PDF with `lib/pdf-theme.yml` (default theme plus the fallback fonts full Noto Serif, for Latin letters such as the Azerbaijani Ə that the bundled Noto Serif subset lacks, and Droid Sans Fallback for Chinese, installed in the Docker image under `/usr/share/fonts/noto` and `/usr/share/fonts/droid-nonlatin`); images are embedded, so the PDF ZIP holds a single file
 - **SVG fallback**: DOCX and LaTeX get a copy of the DocBook file in which every `fileref="….svg"` points to the PNG of the same name, if that PNG exists (`writeWithRasterImages()`); the copy is deleted after Pandoc, so the docbook download keeps the SVGs. The plain style copies `project.logo` with all files of its base name, so `arc42-logo.svg` comes with its PNG fallback
 - **Pandoc Integration**: Two-step conversion (AsciiDoc → DocBook → target format)
-- **Multi-page formats**: one DocBook and one output file per chapter; the feature attributes of the style (e.g. `arc42help` for with-help) are set for the per-chapter conversion
+- **Multi-page formats**: one DocBook and one output file per chapter that the main document includes (`chapterFiles()`); the feature attributes of the style (e.g. `arc42help` for with-help) are set for the per-chapter conversion
 - **Diagnostics**: Asciidoctor log records and Pandoc's stderr are collected in `diagnostics`, printed after `convertAll()` (deduplicated) and evaluated by `build.groovy` against `--failure-level`
 - **Clean outputs**: `cleanOutputs()` deletes the output directories and DocBook intermediates before a conversion
 - **Parallel Execution**: Uses GParsPool for true parallel conversion
 - **Supported Formats**: html, pdf, asciidoc, docbook, markdown, docx, epub, latex, and more
 
 #### `lib/Packager.groovy`
-- **ZIP Creation**: Packages templates + images into distribution archives
+- **ZIP Creation**: Packages templates + images into distribution archives; a ZIP that cannot be written is deleted and fails the build (`createAllDistributions()` returns the `failed` count), a combination without converted output is skipped
+- **Manifest comparison**: `diffManifests()` (script `compare-manifests.groovy`, `make manifest-diff`) lists the ZIPs whose SHA-256 differs between two builds
 - **Parallel Execution**: Creates all ZIPs concurrently
 - **Output**: `build/dist/*.zip` and `manifest.json`, published as GitHub Release by `make release`
 - **Manifest**: `writeManifest()` writes `manifest.json` next to the ZIPs: project, release tag (if `--release-tag` is given), golden master commit and date, languages (code, name from `distribution.languageNames`, version and date from `version.properties`, plus `isoDate` (`YYYY-MM`) from `revdate-iso` if present), styles, formats (id, `label` from the formats map) and every ZIP of the run with language, style, format, size and `sha256`. Sorted and derived from `SOURCE_DATE_EPOCH`, so it is reproducible. It is the input for GitHub Releases and the download page (decision: ADR 0012 in arc42/meta.arc42.org)
 
 **Performance**: Creates 18 ZIPs in ~0.6s
+
+#### `lib/OutputCheck.groovy`
+Checks of the converted output and the ZIPs, run by `check-output.groovy` (`make validate`), for every language, style and format: output present, valid UTF-8, no leftover AsciiDoc (`ifdef::`, `[role="`, `Unresolved directive`, `{revnumber}`), heading counts equal to the DocBook rendering, help blocks as in the golden master (none in plain; with-help larger than plain in every format), images referenced and shipped or embedded, well-formed DocBook/DOCX/EPUB, PDFs with pages and text (`pdfinfo`, `pdftotext`), `manifest.json` complete and every ZIP readable, with the manifest's SHA-256 and the files of its output directory. With `--format=` only that format is checked.
 
 ### Key Configuration Files
 - **buildconfig.groovy**: Defines template styles, output formats, and paths
@@ -119,7 +130,7 @@ The Golden Master uses AsciiDoc role attributes to mark content (prefix set by `
 - `lib/Templates.groovy` removes unwanted features using regex to create template variants
 
 ## System Requirements
-Only `make` and Docker with Compose v2. The Docker image contains Java 21, Groovy 5.0.3, Pandoc 3.7.0.2 (pinned, checksum-verified), cmark, make, git and the PDF fallback fonts (full Noto Serif, Droid Sans Fallback for Chinese). The Groovy scripts need Groovy 4.0+ and Java 11+ if they are ever run outside the image.
+Only `make` and Docker with Compose v2. The Docker image contains Java 21, Groovy 5.0.3, Pandoc 3.7.0.2 (pinned, checksum-verified), cmark, poppler-utils (`pdfinfo`, `pdftotext` for the PDF output check), make, git and the PDF fallback fonts (full Noto Serif, Droid Sans Fallback for Chinese). The Groovy scripts need Groovy 4.0+ and Java 11+ if they are ever run outside the image.
 
 ## Output Locations
 - `build/src_gen/`: Generated AsciiDoc templates (plain, with-help variants); deleted at the start of the `templates` phase
@@ -139,6 +150,8 @@ make test-config        # building a non-arc42 project from its own config file
 make test-lint          # golden master validation on a fixture, ZH-TW discovery, GitHub annotations and report
 make test-manifest      # manifest.json: languages, styles, formats, sha256 of every ZIP, reproducibility, release notes, template commit
 make test-downloads     # download check: missing files, redirects, checksums (local HTTP server)
+make test-cli           # build.groovy rejects unknown phases, options and formats
+make test-outputcheck   # output checks (make validate): a small full build passes, damaged output is reported
 ```
 
 The test suite validates:
