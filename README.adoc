@@ -101,6 +101,8 @@ make templates DOCKER_RUN_OPTS="-e FOO=bar"    # extra options for docker compos
 
 Template content, including new translations, is developed in https://github.com/arc42/arc42-template[arc42-template]. Its CI validates every pull request with this generator and shows each problem as annotation on the file and line.
 
+Of a language folder the generator uses the main document, `adoc/`, `images/` and `version.properties`, nothing else. In particular `<LANG>/translation/` (the terms of a translation, `terms.adoc`) is never converted or published; a test (`make test-outputcheck`) guards that.
+
 This repository records the arc42-template commit it builds (the submodule "pin"), so the same generator commit always produces the same ZIPs. When arc42-template main moves, Dependabot opens a pull request here that moves the pin; the CI of this repository builds it. To try a template change locally:
 
 ----
